@@ -36,7 +36,9 @@
       document.querySelectorAll(".mermaid"),
     );
     if (!nodes.length) return;
-    mermaid.run({ nodes: nodes }).catch(function () {
+    mermaid.run({ nodes: nodes }).then(function () {
+      diagramZoom();
+    }).catch(function () {
       nodes.forEach(function (n) {
         n.classList.add("mermaid-failed");
       });
@@ -52,14 +54,20 @@
     );
     var html = "";
     var currentModule = null;
+    var currentPart = null;
     sections.forEach(function (sec) {
       var mod = sec.closest(".module");
       var modTitle = mod ? mod.getAttribute("data-title") : "";
       var modNum = mod ? mod.getAttribute("data-num") : "";
+      var part = mod ? mod.getAttribute("data-part") : "";
+      if (part && part !== currentPart) {
+        currentPart = part;
+        html += '<li class="rail-part">' + part + "</li>";
+      }
       if (modTitle && modTitle !== currentModule) {
         currentModule = modTitle;
         html +=
-          '<li class="rail-module">模块 ' +
+          '<li class="rail-module">Ch ' +
           modNum +
           " · " +
           modTitle +
@@ -290,6 +298,115 @@
     });
   }
 
+  /* ---------- book chrome ---------- */
+  function bookChrome() {
+    var mods = Array.prototype.slice.call(document.querySelectorAll(".module"));
+    mods.forEach(function (mod, i) {
+      var head = mod.querySelector(".module-head");
+      var part = mod.getAttribute("data-part");
+      if (head && part && !head.querySelector(".part-label")) {
+        var p = document.createElement("p");
+        p.className = "part-label";
+        p.textContent = part;
+        head.insertBefore(p, head.firstChild);
+      }
+      var nav = document.createElement("div");
+      nav.className = "chapter-nav";
+      var prev = mods[i - 1];
+      var next = mods[i + 1];
+      function link(m, label) {
+        if (!m) return "";
+        var h = m.querySelector("h2");
+        return (
+          '<a href="#' + m.id + '"><span class="cn-label">' + label + "</span>" +
+          (h ? h.textContent : m.id) + "</a>"
+        );
+      }
+      nav.innerHTML = link(prev, "上一章") + link(next, "下一章");
+      mod.appendChild(nav);
+    });
+  }
+
+  /* ---------- diagram zoom ---------- */
+  function diagramZoom() {
+    var figures = Array.prototype.slice.call(document.querySelectorAll("figure.diagram"));
+    if (!figures.length || document.querySelector(".diagram-modal")) return;
+    var modal = document.createElement("div");
+    modal.className = "diagram-modal";
+    modal.hidden = true;
+    modal.innerHTML =
+      '<div class="dm-bar"><button type="button" data-z="out">−</button>' +
+      '<button type="button" data-z="reset">100%</button>' +
+      '<button type="button" data-z="in">+</button>' +
+      '<button type="button" data-z="close">关闭</button></div>' +
+      '<div class="dm-canvas"><div class="dm-stage"></div></div>';
+    document.body.appendChild(modal);
+    var stage = modal.querySelector(".dm-stage");
+    var canvas = modal.querySelector(".dm-canvas");
+    var scale = 1, tx = 0, ty = 0, drag = null;
+
+    function apply() {
+      stage.style.transform =
+        "translate(" + tx + "px," + ty + "px) scale(" + scale + ")";
+    }
+    function open(svg) {
+      stage.innerHTML = "";
+      stage.appendChild(svg.cloneNode(true));
+      scale = 1; tx = 0; ty = 0; apply();
+      modal.hidden = false;
+      document.body.classList.add("modal-open");
+      modal.querySelector('[data-z="close"]').focus();
+    }
+    function close() {
+      modal.hidden = true;
+      document.body.classList.remove("modal-open");
+      stage.innerHTML = "";
+    }
+    modal.querySelector('[data-z="close"]').addEventListener("click", close);
+    modal.querySelector('[data-z="in"]').addEventListener("click", function () {
+      scale = Math.min(3, scale + 0.2); apply();
+    });
+    modal.querySelector('[data-z="out"]').addEventListener("click", function () {
+      scale = Math.max(0.5, scale - 0.2); apply();
+    });
+    modal.querySelector('[data-z="reset"]').addEventListener("click", function () {
+      scale = 1; tx = 0; ty = 0; apply();
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && !modal.hidden) close();
+    });
+    canvas.addEventListener("wheel", function (e) {
+      e.preventDefault();
+      scale = Math.max(0.5, Math.min(3, scale + (e.deltaY < 0 ? 0.1 : -0.1)));
+      apply();
+    }, { passive: false });
+    canvas.addEventListener("pointerdown", function (e) {
+      drag = { x: e.clientX - tx, y: e.clientY - ty };
+      canvas.setPointerCapture(e.pointerId);
+    });
+    canvas.addEventListener("pointermove", function (e) {
+      if (!drag) return;
+      tx = e.clientX - drag.x;
+      ty = e.clientY - drag.y;
+      apply();
+    });
+    canvas.addEventListener("pointerup", function () { drag = null; });
+
+    figures.forEach(function (fig) {
+      var svg = fig.querySelector("svg");
+      if (!svg) return;
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "diagram-zoom";
+      btn.textContent = "放大 ⤢";
+      btn.addEventListener("click", function (e) {
+        e.preventDefault();
+        open(svg);
+      });
+      fig.appendChild(btn);
+    });
+  }
+
   /* ---------- ask first ---------- */
   function askCards() {
     document.querySelectorAll("[data-ask]").forEach(function (box) {
@@ -350,6 +467,7 @@
   document.addEventListener("DOMContentLoaded", function () {
     highlightCode();
     askCards();
+    bookChrome();
     renderDiagrams();
     buildRail();
     progress();

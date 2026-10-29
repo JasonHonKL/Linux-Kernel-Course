@@ -13,13 +13,13 @@
 <body>
 <header class="topnav">
   <div class="brand"><span class="brand-mark"></span>Linux 全景</div>
-  <div class="navmeta">linux 7.3 · 14 模块 · 11+1 实验 · ≈16 小时</div>
+  <div class="navmeta">linux 7.3 · 22 章 · 11+1 实验 · 项目制</div>
   <nav class="navlinks" aria-label="课程导航">
     <a href="#boot">启动</a>
     <a href="#f1">文件</a>
     <a href="#f2">用户</a>
     <a href="#f4">内存</a>
-    <a href="#m2">网络</a>
+    <a href="#adv-c">工程</a>
     <a href="#containers">容器</a>
   </nav>
 </header>
@@ -41,10 +41,10 @@
   <h1>Linux 全景：<br>从 passwd 到网络栈</h1>
   <p class="lede">先问：登录时密码去哪了？<code>mmap</code> 为什么不立刻读文件？硬链接为什么共享 inode？从文件、用户、进程、内存一路问到 socket、路由与 XDP。</p>
   <div class="meta-row">
-    <span><strong>14</strong> 个模块</span>
-    <span><strong>20</strong> 个小节</span>
+    <span><strong>22</strong> 章</span>
+    <span><strong>28</strong> 节</span>
     <span><strong>11+1</strong> 个实验</span>
-    <span><strong>≈16</strong> 小时</span>
+    <span><strong>≈24</strong> 小时</span>
     <span>轨道：<strong>Deep Diver</strong></span>
   </div>
 
@@ -54,7 +54,7 @@
         <source src="assets/linux-main.mp4" type="video/mp4">
         你的浏览器不支持视频标签。可以打开 <code>linux-course/assets/linux-main.mp4</code>。
       </video>
-      <figcaption><span>网络深入模块主片 · 68 秒</span><span>基础模块先读问题卡与实验</span></figcaption>
+      <figcaption><span>网络深入模块主片 · 68 秒</span><span>Part III 是项目制系统工程</span></figcaption>
     </div>
     <div class="start-card">
       <h2>开始之前</h2>
@@ -102,7 +102,7 @@ flowchart LR
 </section>
 </div>
 
-<section class="module" id="boot" data-num="1" data-title="开机与启动">
+<section class="module" id="boot" data-num="1" data-part="Part I · 系统基础" data-title="开机与启动">
 <div class="wrap">
   <header class="module-head">
     <div class="module-num">01</div>
@@ -232,7 +232,7 @@ $ journalctl -b -p err | tail</pre>
 </div>
 </section>
 
-<section class="module" id="shell" data-num="2" data-title="Shell 与文本">
+<section class="module" id="shell" data-num="2" data-part="Part I · 系统基础" data-title="Shell 与文本">
 <div class="wrap">
   <header class="module-head">
     <div class="module-num">02</div>
@@ -368,7 +368,7 @@ err</pre></details>
 </div>
 </section>
 
-<section class="module" id="f1" data-num="3" data-title="文件、inode 与挂载">
+<section class="module" id="f1" data-num="3" data-part="Part I · 系统基础" data-title="文件、inode 与挂载">
 <div class="wrap">
   <header class="module-head">
     <div class="module-num">03</div>
@@ -579,7 +579,7 @@ set -eu
 </div>
 </section>
 
-<section class="module" id="f2" data-num="4" data-title="用户、passwd 与权限">
+<section class="module" id="f2" data-num="4" data-part="Part I · 系统基础" data-title="用户、passwd 与权限">
 <div class="wrap">
   <header class="module-head">
     <div class="module-num">04</div>
@@ -777,7 +777,7 @@ flowchart LR
 </div>
 </section>
 
-<section class="module" id="f3" data-num="5" data-title="进程、信号与 systemd">
+<section class="module" id="f3" data-num="5" data-part="Part I · 系统基础" data-title="进程、信号与 systemd">
 <div class="wrap">
   <header class="module-head">
     <div class="module-num">05</div>
@@ -923,7 +923,7 @@ lrwx------ 1 user user 64 ... 0 -&gt; /dev/pts/0</pre></details>
 </div>
 </section>
 
-<section class="module" id="f4" data-num="6" data-title="内存与 mmap">
+<section class="module" id="f4" data-num="6" data-part="Part I · 系统基础" data-title="内存与 mmap">
 <div class="wrap">
   <header class="module-head">
     <div class="module-num">06</div>
@@ -1095,7 +1095,7 @@ char *p = mmap(NULL, 4096, PROT_READ | PROT_WRITE,
 </div>
 </section>
 
-<section class="module" id="storage" data-num="7" data-title="存储与 I/O">
+<section class="module" id="storage" data-num="7" data-part="Part I · 系统基础" data-title="存储与 I/O">
 <div class="wrap">
   <header class="module-head">
     <div class="module-num">07</div>
@@ -1231,7 +1231,7 @@ $ lsof +L1 | head</pre>
 </div>
 </section>
 
-<section class="module" id="m1" data-num="8" data-title="内核 C 与地址空间">
+<section class="module" id="m1" data-num="8" data-part="Part II · 内核与网络" data-title="内核 C 与地址空间">
 <div class="wrap">
   <header class="module-head">
     <div class="module-num">08</div>
@@ -1677,7 +1677,7 @@ static int __init hello_init(void)
 </div>
 </section>
 
-<section class="module" id="m2" data-num="9" data-title="网络栈地图与地址">
+<section class="module" id="m2" data-num="9" data-part="Part II · 内核与网络" data-title="网络栈地图与地址">
 <div class="wrap">
   <header class="module-head">
     <div class="module-num">09</div>
@@ -2059,7 +2059,7 @@ bool kc_cidr_contains(uint32_t net_be,
 </div>
 </section>
 
-<section class="module" id="m3" data-num="10" data-title="socket 与发送路径">
+<section class="module" id="m3" data-num="10" data-part="Part II · 内核与网络" data-title="socket 与发送路径">
 <div class="wrap">
   <header class="module-head">
     <div class="module-num">10</div>
@@ -2471,7 +2471,7 @@ for (;;) {
 </div>
 </section>
 
-<section class="module" id="m4" data-num="11" data-title="IP、路由与邻居">
+<section class="module" id="m4" data-num="11" data-part="Part II · 内核与网络" data-title="IP、路由与邻居">
 <div class="wrap">
   <header class="module-head">
     <div class="module-num">11</div>
@@ -2875,7 +2875,7 @@ ip netns add kc-ns2
 </div>
 </section>
 
-<section class="module" id="m5" data-num="12" data-title="sk_buff 与 TCP">
+<section class="module" id="m5" data-num="12" data-part="Part II · 内核与网络" data-title="sk_buff 与 TCP">
 <div class="wrap">
   <header class="module-head">
     <div class="module-num">12</div>
@@ -3238,7 +3238,7 @@ stateDiagram-v2
 </div>
 </section>
 
-<section class="module" id="m6" data-num="13" data-title="驱动、NAPI 与 XDP">
+<section class="module" id="m6" data-num="13" data-part="Part II · 内核与网络" data-title="驱动、NAPI 与 XDP">
 <div class="wrap">
   <header class="module-head">
     <div class="module-num">13</div>
@@ -3640,7 +3640,7 @@ int xdp_drop_icmp(struct xdp_md *ctx)
 </div>
 </section>
 
-<section class="module" id="containers" data-num="14" data-title="容器与隔离">
+<section class="module" id="containers" data-num="14" data-part="Part II · 内核与网络" data-title="容器与隔离">
 <div class="wrap">
   <header class="module-head">
     <div class="module-num">14</div>
@@ -3779,6 +3779,589 @@ $ grep -E 'Cap(Eff|Prm)' /proc/$pid/status</pre>
   </section>
 </div>
 </section>
+
+<section class="module" id="adv-c" data-num="15" data-part="Part III · 系统工程" data-title="内核 C、UB 与架构">
+<div class="wrap">
+  <header class="module-head">
+    <div class="module-num">15</div>
+    <h2>内核 C、UB 与架构</h2>
+    <p class="lede">从这一章起，目标不是“看懂”，而是“写出不会在优化后爆炸的代码”。内核 C 的第一敌人是未定义行为，第二是内存序。</p>
+  </header>
+
+  <section class="section" id="adv-c-1" data-title="15.1 未定义行为与内存序" data-read="9" data-check="6" data-next="下一章：锁、RCU 与并发">
+    <span class="section-label">模块 15 · 小节 1</span>
+    <h3>未定义行为与内存序</h3><span class="timechip">阅读 ≈9 分钟 · 检查 ≈6 分钟</span>
+
+    <div class="ask" data-ask>
+      <p class="q"><span class="tag">先问</span>两个 CPU 同时写不同变量，需要锁吗？</p>
+      <button type="button" class="textbtn">先想 10 秒，再看</button>
+      <div class="a" hidden><p>不一定需要锁，但需要保证没有数据竞争；不同变量落在同一 cache line 会 false sharing，性能可能比加锁更差。</p></div>
+    </div>
+
+    <div class="screen">
+      <p>内核 C 假设编译器会按标准优化：有符号溢出、越界、严格别名、未初始化读都是 UB。UB 不是“结果不确定”，而是“编译器可以假设它永不发生”。</p>
+      <figure class="diagram">
+        <div class="diagram-note">缓存层级与 false sharing</div>
+        <div class="mermaid">
+flowchart LR
+  C0["CPU0 L1"] --> L2["L2"]
+  C1["CPU1 L1"] --> L2
+  L2 --> L3["L3 / LLC"]
+  L3 --> M["DRAM"]
+  X["变量 A"] -.->|"同一 cache line"| Y["变量 B"]
+        </div>
+        <figcaption>两个线程写同一 cache line 的不同变量，会来回抢所有权，这就是 false sharing。</figcaption>
+        <details><summary>图源</summary><pre>flowchart LR
+  cpu0 --> l2 --> l3 --> dram
+  cpu1 --> l2
+  A -. same line .- B</pre></details>
+      </figure>
+      <p>内核用 <code>READ_ONCE/WRITE_ONCE</code> 阻止编译器合并/重排单次访问；用 <code>smp_mb/rmb/wmb</code> 或 acquire/release 约束 CPU 与编译器的可见顺序。</p>
+      <div class="code">
+        <div class="code-head"><span>include/linux/compiler.h · READ_ONCE/WRITE_ONCE</span></div>
+        <pre><code>#define READ_ONCE(x) (*(volatile typeof(x) *)&amp;(x))
+#define WRITE_ONCE(x, val) (*(volatile typeof(x) *)&amp;(x) = (val))</code></pre>
+      </div>
+    </div>
+
+    <figure class="diagram">
+      <div class="diagram-note">三种顺序</div>
+      <div class="mermaid">
+flowchart TB
+  P["程序顺序"] --> C["编译器顺序"]
+  C --> X["CPU 执行顺序"]
+  X --> V["其他 CPU 观察顺序"]
+  V --> M["memory barrier 约束其中一部分"]
+        </div>
+        <figcaption>barrier 不是“刷 cache”，而是建立顺序与可见性规则；不同架构代价不同。</figcaption>
+        <details><summary>图源</summary><pre>flowchart TB
+  program --> compiler --> cpu --> observed
+  barrier --> observed</pre></details>
+      </figure>
+
+    <div class="gate">
+      <div class="gate-step">
+        <div class="gate-step-head"><span class="step-num">1</span><h4>检查理解</h4><span class="gate-time">≈2 分钟 · 不计分</span></div>
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">1.</span><code>READ_ONCE</code> 主要防止：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="advc-q1" value="a"><span><span class="opt-key">A</span> 所有 CPU 重排<span class="opt-why">它主要约束编译器对单次访问的处理。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="advc-q1" value="b"><span><span class="opt-key">B</span> 编译器合并/拆分或缓存单次读<span class="opt-why">对。配合 barrier 才有完整顺序语义。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="advc-q1" value="c"><span><span class="opt-key">C</span> 加锁<span class="opt-why">它不加锁。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>单次访问原子 ≠ 多个访问有序。</p>
+        </fieldset>
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">2.</span>false sharing 的典型修复是：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="advc-q2" value="a"><span><span class="opt-key">A</span> 加更多锁<span class="opt-why">可能更慢。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="advc-q2" value="b"><span><span class="opt-key">B</span> 按 cache line 对齐/填充<span class="opt-why">对。让热点变量落在不同 line。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="advc-q2" value="c"><span><span class="opt-key">C</span> 改大页<span class="opt-why">与 line 争用无关。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>用 <code>____cacheline_aligned</code> 或 padding。</p>
+        </fieldset>
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">3.</span>有符号整数溢出在内核 C 中：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="advc-q3" value="a"><span><span class="opt-key">A</span> 会回绕<span class="opt-why">标准里是 UB。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="advc-q3" value="b"><span><span class="opt-key">B</span> 是 UB，优化器可假设不发生<span class="opt-why">对。用 <code>check_add_overflow</code> 等 helper。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="advc-q3" value="c"><span><span class="opt-key">C</span> 自动饱和<span class="opt-why">没有自动饱和。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>内核常用 <code>-fno-strict-overflow</code>，但仍要显式检查。</p>
+        </fieldset>
+      </div>
+      <div class="gate-step">
+        <div class="gate-step-head"><span class="step-num">2</span><h4>用自己的话解释</h4><span class="gate-time">≈4 分钟 · 本地保存</span></div>
+        <div class="sa" data-sa="adv-c-1">
+          <label class="sa-label" for="sa-adv-c-1">用 3 句话解释：为什么“单次读原子”不等于“多步操作有序”？举一个 acquire/release 的场景。</label>
+          <textarea id="sa-adv-c-1" rows="4" placeholder="生产者初始化数据 → release 发布 → 消费者 acquire 读取……"></textarea>
+          <div class="sa-meta"><span class="wordcount">0 字</span><span class="save-status" aria-live="polite"></span><span class="spacer"></span><button type="button" class="textbtn" data-clear>清空</button></div>
+          <div class="sa-actions"><button type="button" class="btn secondary small" data-reveal>查看参考答案</button><button type="button" class="textbtn" data-stuck>我卡住了</button><button type="button" class="textbtn" data-copy-mine>复制我的答案</button></div>
+          <div class="model" hidden><span class="model-kicker">参考答案</span><p>READ_ONCE 只保证这次读不会被编译器合并或拆开，不保证它之前/之后的访问按顺序被其他 CPU 看到。生产者可以先初始化数据，再用 release store 发布指针；消费者用 acquire load 读到指针后，才能保证看到初始化后的数据。缺少配对屏障时，消费者可能读到指针却看到旧数据。</p></div>
+          <div class="selfcheck" aria-label="自查"><label><input type="checkbox"> 我区分了原子性与顺序。</label><label><input type="checkbox"> 我给出 release/acquire 的生产者消费者例子。</label><label><input type="checkbox"> 我说出了缺少屏障的后果。</label></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="lab project">
+      <div class="lab-head"><div class="lab-kicker">P1 · 12–20 小时</div><h3>Lock-free SPSC ring + 压测</h3><p class="lab-sub">单生产者单消费者环形队列，acquire/release，cache line 对齐；用两个线程压测并给出吞吐/延迟。</p></div>
+      <div class="lab-body"><p>交付：C 实现、单元测试、压测脚本、false sharing 对比、writeup。没有 benchmark 不算完成。</p></div>
+    </div>
+  </section>
+</div>
+</section>
+
+<section class="module" id="adv-lock" data-num="16" data-part="Part III · 系统工程" data-title="锁、RCU 与并发">
+<div class="wrap">
+  <header class="module-head"><div class="module-num">16</div><h2>锁、RCU 与并发</h2><p class="lede">内核并发的难点不是“加锁”，而是知道自己在哪个上下文、能不能睡、谁在等谁。lockdep 与 KCSAN 是这里的编译器。</p></header>
+
+  <section class="section" id="adv-lock-1" data-title="16.1 上下文、锁与 RCU" data-read="9" data-check="6" data-next="下一章：内存、DMA、IOMMU">
+    <span class="section-label">模块 16 · 小节 1</span><h3>上下文、锁与 RCU</h3><span class="timechip">阅读 ≈9 分钟 · 检查 ≈6 分钟</span>
+
+    <div class="ask" data-ask><p class="q"><span class="tag">先问</span>中断上下文里能拿 mutex 吗？</p><button type="button" class="textbtn">先想 10 秒，再看</button><div class="a" hidden><p>不能。mutex 可能睡眠；中断上下文不能睡。用 spinlock/irqsave 或把工作推给 workqueue。</p></div></div>
+
+    <div class="screen">
+      <p>先判断上下文：进程上下文可以睡；软中断/硬中断/tasklet 不可以。锁的选择由“能否睡眠、谁会抢、是否跨 CPU”决定。</p>
+      <figure class="diagram"><div class="diagram-note">锁的选择</div><div class="mermaid">
+flowchart TB
+  A["临界区"] --> B{"会睡眠？"}
+  B -->|"会"| M["mutex / rwsem"]
+  B -->|"不会"| S["spinlock"]
+  S --> I{"中断会抢？"}
+  I -->|"会"| IR["spin_lock_irqsave"]
+  I -->|"不会"| P["spin_lock"]
+      </div><figcaption>spinlock 不睡眠但会关抢占；mutex 可睡眠，不能在中断里用。</figcaption><details><summary>图源</summary><pre>flowchart TB
+  sleep? --> mutex
+  no --> spinlock --> irqsave?</pre></details></figure>
+      <div class="code"><div class="code-head"><span>include/linux/spinlock.h / mutex.h</span></div><pre><code>spin_lock_irqsave(&amp;lock, flags);
+/* 不可睡眠 */
+spin_unlock_irqrestore(&amp;lock, flags);
+
+mutex_lock(&amp;mtx);
+/* 可睡眠，不能在 IRQ 上下文 */
+mutex_unlock(&amp;mtx);</code></pre></div>
+    </div>
+
+    <div class="screen">
+      <h4>RCU：读多写少的另一条路</h4>
+      <p>RCU 让读者无锁、无原子操作地遍历；写者发布新版本，等所有旧读者离开（grace period）再释放旧对象。</p>
+      <figure class="diagram"><div class="diagram-note">RCU 发布/回收</div><div class="mermaid">
+sequenceDiagram
+  participant W as 写者
+  participant R as 读者
+  W->>W: 分配新对象
+  W->>W: rcu_assign_pointer
+  R->>R: rcu_read_lock
+  R->>R: 读旧/新对象
+  R->>R: rcu_read_unlock
+  W->>W: synchronize_rcu
+  W->>W: kfree 旧对象
+      </div><figcaption>读者可能看到旧或新，但不会看到半初始化；写者等 grace period 后才释放。</figcaption><details><summary>图源</summary><pre>sequenceDiagram
+  W->>W: publish
+  R->>R: read_lock/read
+  W->>W: synchronize_rcu
+  W->>W: free</pre></details></figure>
+      <p>工具：<code>lockdep</code> 抓锁顺序/上下文错误；<code>KCSAN</code> 抓数据竞争；<code>CONFIG_PROVE_RCU</code> 抓 RCU 用法错误。</p>
+    </div>
+
+    <div class="gate">
+      <div class="gate-step"><div class="gate-step-head"><span class="step-num">1</span><h4>检查理解</h4><span class="gate-time">≈2 分钟 · 不计分</span></div>
+        <fieldset class="mc" data-mc><legend><span class="qnum">1.</span>中断上下文不能使用 mutex，因为：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="advl-q1" value="a"><span><span class="opt-key">A</span> mutex 太慢<span class="opt-why">不是速度问题。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="advl-q1" value="b"><span><span class="opt-key">B</span> mutex 可能睡眠<span class="opt-why">对。中断上下文不能调度。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="advl-q1" value="c"><span><span class="opt-key">C</span> mutex 不支持 SMP<span class="opt-why">支持。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div><p class="mc-result" aria-live="polite"></p><p class="mc-why" hidden>上下文决定锁，不是反过来。</p>
+        </fieldset>
+        <fieldset class="mc" data-mc><legend><span class="qnum">2.</span>RCU 的 grace period 保证：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="advl-q2" value="a"><span><span class="opt-key">A</span> 所有读者立刻看到新值<span class="opt-why">不保证。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="advl-q2" value="b"><span><span class="opt-key">B</span> 旧读者都离开后才释放旧对象<span class="opt-why">对。读侧无锁，写侧等待。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="advl-q2" value="c"><span><span class="opt-key">C</span> 写者不需要同步<span class="opt-why">写者之间仍需处理。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div><p class="mc-result" aria-live="polite"></p><p class="mc-why" hidden>RCU 优化读，不优化写。</p>
+        </fieldset>
+        <fieldset class="mc" data-mc><legend><span class="qnum">3.</span>KCSAN 主要发现：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="advl-q3" value="a"><span><span class="opt-key">A</span> 内存泄漏<span class="opt-why">那是 kmemleak。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="advl-q3" value="b"><span><span class="opt-key">B</span> 数据竞争<span class="opt-why">对。基于 watchpoint 采样。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="advl-q3" value="c"><span><span class="opt-key">C</span> 死锁<span class="opt-why">lockdep 更擅长。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div><p class="mc-result" aria-live="polite"></p><p class="mc-why" hidden>工具各管一类 bug。</p>
+        </fieldset>
+      </div>
+      <div class="gate-step"><div class="gate-step-head"><span class="step-num">2</span><h4>用自己的话解释</h4><span class="gate-time">≈4 分钟 · 本地保存</span></div>
+        <div class="sa" data-sa="adv-lock-1"><label class="sa-label" for="sa-adv-lock-1">用 3 句话解释：什么场景适合 RCU 而不是读写锁？grace period 在等什么？</label><textarea id="sa-adv-lock-1" rows="4" placeholder="读多写少、旧读者、延迟释放……"></textarea><div class="sa-meta"><span class="wordcount">0 字</span><span class="save-status" aria-live="polite"></span><span class="spacer"></span><button type="button" class="textbtn" data-clear>清空</button></div><div class="sa-actions"><button type="button" class="btn secondary small" data-reveal>查看参考答案</button><button type="button" class="textbtn" data-stuck>我卡住了</button><button type="button" class="textbtn" data-copy-mine>复制我的答案</button></div>
+          <div class="model" hidden><span class="model-kicker">参考答案</span><p>读多写少、读者不能阻塞或临界区很短时适合 RCU：读者只标记进入读侧临界区，不做原子操作；写者发布新版本，等所有在旧版本上的读者退出后再释放。grace period 等的是“所有 CPU 都不再处于旧读侧临界区”，不是等某个具体线程。</p></div>
+          <div class="selfcheck" aria-label="自查"><label><input type="checkbox"> 我说出读多写少/读者不阻塞。</label><label><input type="checkbox"> 我说明发布新版本与延迟释放。</label><label><input type="checkbox"> 我说明 grace period 等旧读者退出。</label></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="lab project"><div class="lab-head"><div class="lab-kicker">P2 · 10–16 小时</div><h3>复现并修一个数据竞争</h3><p class="lab-sub">写一个模块或用户态程序制造 race，用 KCSAN/TSAN 抓到，再修；提交前后报告。</p></div><div class="lab-body"><p>交付：复现步骤、工具输出、修复 diff、为什么修复正确的论证。</p></div></div>
+  </section>
+</div>
+</section>
+
+<section class="module" id="adv-mm" data-num="17" data-part="Part III · 系统工程" data-title="内存、DMA 与 IOMMU">
+<div class="wrap"><header class="module-head"><div class="module-num">17</div><h2>内存、DMA 与 IOMMU</h2><p class="lede">分配器、页表、DMA 地址与 IOMMU 是驱动的地基。写错一个方向或生命周期，现象会是随机崩溃，而不是编译错误。</p></header>
+<section class="section" id="adv-mm-1" data-title="17.1 分配器、页表与 DMA" data-read="9" data-check="6" data-next="下一章：PCIe 与驱动">
+<span class="section-label">模块 17 · 小节 1</span><h3>分配器、页表与 DMA</h3><span class="timechip">阅读 ≈9 分钟 · 检查 ≈6 分钟</span>
+
+<div class="ask" data-ask><p class="q"><span class="tag">先问</span>kmalloc 的地址能直接给设备 DMA 吗？</p><button type="button" class="textbtn">先想 10 秒，再看</button><div class="a" hidden><p>不能。设备需要 DMA 地址；要 dma_map_single 并遵守方向/生命周期。</p></div></div>
+
+<div class="screen">
+  <p>分配器分层：buddy 管页，slab/slub 管小对象，vmalloc 管非连续虚拟地址。DMA 地址不是 CPU 虚拟地址，可能经过 IOMMU 翻译。</p>
+  <figure class="diagram"><div class="diagram-note">分配与映射</div><div class="mermaid">
+flowchart TB
+  A["kmalloc / kmem_cache"] --> S["slab objects"]
+  S --> P["buddy pages"]
+  P --> V["内核虚拟地址"]
+  V --> D["dma_map_single"]
+  D --> I["IOMMU / 总线地址"]
+  I --> DEV["设备"]
+      </div><figcaption>CPU 用虚拟地址，设备用 DMA 地址；两者不能混。</figcaption><details><summary>图源</summary><pre>flowchart TB
+  kmalloc --> slab --> buddy
+  virt --> dma_map --> iommu --> device</pre></details></figure>
+  <div class="code"><div class="code-head"><span>kernel/dma/mapping.c · dma_map_single</span></div><pre><code>dma_addr_t dma_map_single(struct device *dev, void *ptr,
+			   size_t size, enum dma_data_direction dir);
+void dma_unmap_single(struct device *dev, dma_addr_t addr,
+		      size_t size, enum dma_data_direction dir);</code></pre></div>
+</div>
+
+<div class="screen">
+  <h4>方向、生命周期与 IOMMU</h4>
+  <p>DMA 方向决定 cache 维护：TO_DEVICE、FROM_DEVICE、BIDIRECTIONAL。映射期间 CPU 不应随意释放/迁移 buffer；流式映射用完要 unmap。</p>
+  <figure class="diagram"><div class="diagram-note">IOMMU 的价值</div><div class="mermaid">
+flowchart LR
+  DEV["设备"] -->|"DMA 地址"| IO["IOMMU"]
+  IO -->|"翻译/检查"| P["物理页"]
+  IO -.->|"越界"| F["fault / 阻断"]
+      </div><figcaption>IOMMU 既做地址翻译，也做隔离；没有它，设备可以写任意物理内存。</figcaption><details><summary>图源</summary><pre>flowchart LR
+  device --> iommu --> phys
+  iommu -. fault .-> block</pre></details></figure>
+  <p>常见 bug：map 了却忘记 unmap；unmap 后设备还在写；用栈上 buffer 做异步 DMA；方向写反导致 cache 不一致。</p>
+</div>
+
+<div class="gate"><div class="gate-step"><div class="gate-step-head"><span class="step-num">1</span><h4>检查理解</h4><span class="gate-time">≈2 分钟 · 不计分</span></div>
+<fieldset class="mc" data-mc><legend><span class="qnum">1.</span>slab 分配器主要解决：</legend>
+<label class="opt" data-correct="0"><input type="radio" name="advm-q1" value="a"><span><span class="opt-key">A</span> 大块连续物理内存<span class="opt-why">那是 buddy。</span><span class="mark"></span></span></label>
+<label class="opt" data-correct="1"><input type="radio" name="advm-q1" value="b"><span><span class="opt-key">B</span> 小对象频繁分配/回收<span class="opt-why">对。缓存同类对象，减少碎片与初始化。</span><span class="mark"></span></span></label>
+<label class="opt" data-correct="0"><input type="radio" name="advm-q1" value="c"><span><span class="opt-key">C</span> 非连续虚拟地址<span class="opt-why">那是 vmalloc。</span><span class="mark"></span></span></label>
+<div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div><p class="mc-result" aria-live="polite"></p><p class="mc-why" hidden>三种分配器各有适用场景。</p></fieldset>
+<fieldset class="mc" data-mc><legend><span class="qnum">2.</span>设备 DMA 应使用：</legend>
+<label class="opt" data-correct="0"><input type="radio" name="advm-q2" value="a"><span><span class="opt-key">A</span> 内核虚拟地址<span class="opt-why">设备不认。</span><span class="mark"></span></span></label>
+<label class="opt" data-correct="1"><input type="radio" name="advm-q2" value="b"><span><span class="opt-key">B</span> dma_map_* 返回的 dma_addr_t<span class="opt-why">对。经过 IOMMU/平台翻译。</span><span class="mark"></span></span></label>
+<label class="opt" data-correct="0"><input type="radio" name="advm-q2" value="c"><span><span class="opt-key">C</span> 用户虚拟地址<span class="opt-why">更不行。</span><span class="mark"></span></span></label>
+<div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div><p class="mc-result" aria-live="polite"></p><p class="mc-why" hidden>CPU/设备地址空间不同。</p></fieldset>
+<fieldset class="mc" data-mc><legend><span class="qnum">3.</span>IOMMU 的作用不包括：</legend>
+<label class="opt" data-correct="0"><input type="radio" name="advm-q3" value="a"><span><span class="opt-key">A</span> 地址翻译<span class="opt-why">包括。</span><span class="mark"></span></span></label>
+<label class="opt" data-correct="0"><input type="radio" name="advm-q3" value="b"><span><span class="opt-key">B</span> 设备隔离<span class="opt-why">包括。</span><span class="mark"></span></span></label>
+<label class="opt" data-correct="1"><input type="radio" name="advm-q3" value="c"><span><span class="opt-key">C</span> 代替 CPU 页表<span class="opt-why">对，它服务设备，不替代 CPU MMU。</span><span class="mark"></span></span></label>
+<div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div><p class="mc-result" aria-live="polite"></p><p class="mc-why" hidden>CPU MMU 与 IOMMU 是两个翻译器。</p></fieldset>
+</div><div class="gate-step"><div class="gate-step-head"><span class="step-num">2</span><h4>用自己的话解释</h4><span class="gate-time">≈4 分钟 · 本地保存</span></div>
+<div class="sa" data-sa="adv-mm-1"><label class="sa-label" for="sa-adv-mm-1">用 3 句话解释：为什么 DMA 映射期间不能随意释放 buffer？IOMMU 如何让错误更安全？</label><textarea id="sa-adv-mm-1" rows="4" placeholder="设备异步、生命周期、翻译/隔离……"></textarea><div class="sa-meta"><span class="wordcount">0 字</span><span class="save-status" aria-live="polite"></span><span class="spacer"></span><button type="button" class="textbtn" data-clear>清空</button></div><div class="sa-actions"><button type="button" class="btn secondary small" data-reveal>查看参考答案</button><button type="button" class="textbtn" data-stuck>我卡住了</button><button type="button" class="textbtn" data-copy-mine>复制我的答案</button></div>
+<div class="model" hidden><span class="model-kicker">参考答案</span><p>DMA 是设备异步访问内存，CPU 返回后设备可能仍在读写；若提前释放或复用 buffer，设备会写到别人的页。IOMMU 把设备可见地址限制在映射范围内，越界会 fault 而不是任意写物理内存；它也提供隔离，但必须正确配置映射与权限。</p></div>
+<div class="selfcheck" aria-label="自查"><label><input type="checkbox"> 我说明设备异步访问。</label><label><input type="checkbox"> 我说明提前释放会写坏内存。</label><label><input type="checkbox"> 我说明 IOMMU 的翻译/隔离。</label></div></div></div></div>
+
+<div class="lab project"><div class="lab-head"><div class="lab-kicker">P3 · 15–25 小时</div><h3>slab cache + DMA 驱动</h3><p class="lab-sub">实现一个内核对象缓存，并用 dma_map_single 与设备（QEMU 假设备或 loopback）做一次 DMA；用 KASAN 验证生命周期。</p></div><div class="lab-body"><p>交付：模块、测试、DMA 方向说明、unmap/释放路径、KASAN 日志。</p></div></div>
+</section></div></section>
+
+<section class="module" id="adv-pci" data-num="18" data-part="Part III · 系统工程" data-title="PCIe 与驱动">
+<div class="wrap"><header class="module-head"><div class="module-num">18</div><h2>PCIe 与驱动</h2><p class="lede">驱动工程师的日常：配置空间、BAR、MMIO、MSI-X、DMA、probe/remove。写对一个假设备，比读十个真驱动更有用。</p></header>
+<section class="section" id="adv-pci-1" data-title="18.1 从配置空间到 probe" data-read="9" data-check="6" data-next="下一章：GPU / DRM / KMS">
+<span class="section-label">模块 18 · 小节 1</span><h3>从配置空间到 probe</h3><span class="timechip">阅读 ≈9 分钟 · 检查 ≈6 分钟</span>
+
+<div class="ask" data-ask><p class="q"><span class="tag">先问</span>驱动怎么知道“这块卡是我的”？</p><button type="button" class="textbtn">先想 10 秒，再看</button><div class="a" hidden><p>通过 PCI vendor/device ID 与 class 匹配，内核调用 probe，驱动再映射 BAR、申请中断。</p></div></div>
+
+<div class="screen">
+  <p>PCIe 设备有配置空间（vendor/device、BAR、capability）。驱动 probe 时映射 BAR 为 <code>__iomem</code>，申请 MSI-X，注册字符/网络/DRM 接口，最后使能设备。</p>
+  <figure class="diagram"><div class="diagram-note">probe 的顺序</div><div class="mermaid">
+flowchart TB
+  M["PCI ID 匹配"] --> P["probe"]
+  P --> B["pci_iomap BAR"]
+  B --> I["申请 MSI-X"]
+  I --> D["DMA mask / 队列"]
+  D --> R["注册设备接口"]
+  R --> E["使能总线主控"]
+      </div><figcaption>顺序错了会丢中断或 DMA 失败；remove 要反向清理。</figcaption><details><summary>图源</summary><pre>flowchart TB
+  match --> probe --> iomap --> irq --> dma --> register</pre></details></figure>
+  <div class="code"><div class="code-head"><span>include/linux/pci.h</span></div><pre><code>static int my_probe(struct pci_dev *pdev,
+		    const struct pci_device_id *id)
+{
+	pci_enable_device(pdev);
+	pci_set_master(pdev);
+	bar = pci_iomap(pdev, 0, 0);
+	/* request_irq / dma_set_mask / register */
+}</code></pre></div>
+</div>
+
+<div class="screen">
+  <h4>MMIO 与中断</h4>
+  <p>MMIO 必须用 <code>readl/writel</code>，不能普通解引用；寄存器位域与端序按设备手册。MSI-X 每个向量独立，适合多队列。</p>
+  <figure class="diagram"><div class="diagram-note">一次 MMIO 写</div><div class="mermaid">
+sequenceDiagram
+  participant D as 驱动
+  participant C as CPU
+  participant P as PCIe 设备
+  D->>C: writel(val, bar + REG)
+  C->>P: MMIO write TLP
+  P-->>C: completion
+  P->>C: MSI-X interrupt
+  C->>D: ISR
+      </div><figcaption>MMIO 写与中断是两条路径；wmb/readl 用于确保顺序。</figcaption><details><summary>图源</summary><pre>sequenceDiagram
+  driver->>device: writel
+  device-->>driver: MSI-X</pre></details></figure>
+</div>
+
+<div class="gate"><div class="gate-step"><div class="gate-step-head"><span class="step-num">1</span><h4>检查理解</h4><span class="gate-time">≈2 分钟 · 不计分</span></div>
+<fieldset class="mc" data-mc><legend><span class="qnum">1.</span>BAR 的作用是：</legend>
+<label class="opt" data-correct="0"><input type="radio" name="advp-q1" value="a"><span><span class="opt-key">A</span> 存驱动代码<span class="opt-why">代码在内存。</span><span class="mark"></span></span></label>
+<label class="opt" data-correct="1"><input type="radio" name="advp-q1" value="b"><span><span class="opt-key">B</span> 给设备寄存器/内存窗口分配地址空间<span class="opt-why">对。映射后 MMIO 访问。</span><span class="mark"></span></span></label>
+<label class="opt" data-correct="0"><input type="radio" name="advp-q1" value="c"><span><span class="opt-key">C</span> 中断号<span class="opt-why">中断在 capability/MSI-X 表。</span><span class="mark"></span></span></label>
+<div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div><p class="mc-result" aria-live="polite"></p><p class="mc-why" hidden>BAR 是地址窗口，不是存储。</p></fieldset>
+<fieldset class="mc" data-mc><legend><span class="qnum">2.</span>MMIO 寄存器应使用：</legend>
+<label class="opt" data-correct="0"><input type="radio" name="advp-q2" value="a"><span><span class="opt-key">A</span> 普通指针解引用<span class="opt-why">会被优化/重排。</span><span class="mark"></span></span></label>
+<label class="opt" data-correct="1"><input type="radio" name="advp-q2" value="b"><span><span class="opt-key">B</span> readl/writel<span class="opt-why">对。端序、屏障、设备语义。</span><span class="mark"></span></span></label>
+<label class="opt" data-correct="0"><input type="radio" name="advp-q2" value="c"><span><span class="opt-key">C</span> memcpy<span class="opt-why">不适用。</span><span class="mark"></span></span></label>
+<div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div><p class="mc-result" aria-live="polite"></p><p class="mc-why" hidden>和 __iomem 一起记。</p></fieldset>
+<fieldset class="mc" data-mc><legend><span class="qnum">3.</span>remove 回调应该：</legend>
+<label class="opt" data-correct="0"><input type="radio" name="advp-q3" value="a"><span><span class="opt-key">A</span> 只释放 BAR<span class="opt-why">中断/DMA/接口都要清理。</span><span class="mark"></span></span></label>
+<label class="opt" data-correct="1"><input type="radio" name="advp-q3" value="b"><span><span class="opt-key">B</span> 按 probe 的反向顺序清理<span class="opt-why">对。停中断、停队列、注销、unmap。</span><span class="mark"></span></span></label>
+<label class="opt" data-correct="0"><input type="radio" name="advp-q3" value="c"><span><span class="opt-key">C</span> 什么都不做<span class="opt-why">会泄漏/崩溃。</span><span class="mark"></span></span></label>
+<div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div><p class="mc-result" aria-live="polite"></p><p class="mc-why" hidden>probe/remove 对称是驱动基本功。</p></fieldset>
+</div><div class="gate-step"><div class="gate-step-head"><span class="step-num">2</span><h4>用自己的话解释</h4><span class="gate-time">≈4 分钟 · 本地保存</span></div>
+<div class="sa" data-sa="adv-pci-1"><label class="sa-label" for="sa-adv-pci-1">用 3 句话描述 probe 的顺序，并解释为什么 remove 要反向清理。</label><textarea id="sa-adv-pci-1" rows="4" placeholder="match → iomap → irq → dma → register……"></textarea><div class="sa-meta"><span class="wordcount">0 字</span><span class="save-status" aria-live="polite"></span><span class="spacer"></span><button type="button" class="textbtn" data-clear>清空</button></div><div class="sa-actions"><button type="button" class="btn secondary small" data-reveal>查看参考答案</button><button type="button" class="textbtn" data-stuck>我卡住了</button><button type="button" class="textbtn" data-copy-mine>复制我的答案</button></div>
+<div class="model" hidden><span class="model-kicker">参考答案</span><p>probe 先由 PCI ID 匹配进入，启用设备并设置 DMA mask，映射 BAR，申请 MSI-X，初始化 DMA 队列，最后注册对外接口并使能。remove 要按相反顺序：先停接口与新请求，停队列/中断，释放 DMA 与 IRQ，unmap BAR，最后禁用设备，避免释放后仍有中断或 DMA 访问。</p></div>
+<div class="selfcheck" aria-label="自查"><label><input type="checkbox"> 我写出 probe 主要步骤。</label><label><input type="checkbox"> 我说明先停新请求。</label><label><input type="checkbox"> 我说明反向清理避免 use-after-free。</label></div></div></div></div>
+
+<div class="lab project"><div class="lab-head"><div class="lab-kicker">P4 · 20–30 小时</div><h3>QEMU 假 PCIe 设备 + 驱动</h3><p class="lab-sub">QEMU 侧实现 BAR/寄存器/MSI-X/DMA；Linux 侧写 probe/remove、字符设备、ioctl、中断与 DMA。</p></div><div class="lab-body"><p>交付：QEMU 设备、驱动、lspci/dmesg、功能测试、remove 无泄漏、writeup。</p></div></div>
+</section></div></section>
+
+<section class="module" id="adv-gpu" data-num="19" data-part="Part III · 系统工程" data-title="GPU / DRM / KMS">
+<div class="wrap"><header class="module-head"><div class="module-num">19</div><h2>GPU / DRM / KMS</h2><p class="lede">GPU 驱动不是一个“大驱动”，而是内存管理、命令提交、同步、调度、显示、固件与电源的组合。DRM 是 Linux 的统一入口。</p></header>
+<section class="section" id="adv-gpu-1" data-title="19.1 DRM、GEM/TTM 与 fence" data-read="10" data-check="6" data-next="下一章：KVM 与 virtio">
+<span class="section-label">模块 19 · 小节 1</span><h3>DRM、GEM/TTM 与 fence</h3><span class="timechip">阅读 ≈10 分钟 · 检查 ≈6 分钟</span>
+
+<div class="ask" data-ask><p class="q"><span class="tag">先问</span>GPU 命令是谁执行的：CPU 还是 GPU？</p><button type="button" class="textbtn">先想 10 秒，再看</button><div class="a" hidden><p>GPU 异步执行。CPU 提交命令、管内存与 fence；完成由中断/轮询回传。</p></div></div>
+
+<div class="screen">
+  <p>DRM 把显示与渲染设备抽象成 card/connector/crtc/plane/framebuffer；GEM 管 buffer object，TTM 管显存/GTT 迁移，fence 表示“这一步何时完成”。</p>
+  <figure class="diagram"><div class="diagram-note">DRM/KMS 对象</div><div class="mermaid">
+flowchart LR
+  U["用户态 Mesa"] --> D["DRM device"]
+  D --> K["KMS: connector → encoder → crtc → plane"]
+  D --> G["GEM/TTM: BO"]
+  D --> S["GPU scheduler"]
+  S --> F["fence"]
+  F --> I["IRQ / completion"]
+      </div><figcaption>KMS 管显示，GEM/TTM 管内存，scheduler/fence 管异步执行。</figcaption><details><summary>图源</summary><pre>flowchart LR
+  user --> drm --> kms
+  drm --> gem --> scheduler --> fence</pre></details></figure>
+</div>
+
+<div class="screen">
+  <h4>提交、同步、固件、虚拟化</h4>
+  <p>一次提交通常是：分配/映射 BO → 构建命令缓冲 → 绑定页表 → 提交到 ring → 返回 fence。GPU 页表与 CPU 页表分离，IOMMU/SMMU 负责设备侧翻译。</p>
+  <figure class="diagram"><div class="diagram-note">一次 GPU 提交</div><div class="mermaid">
+sequenceDiagram
+  participant A as 应用
+  participant D as DRM 驱动
+  participant G as GPU
+  A->>D: exec + BO handles + fence
+  D->>D: 校验/绑定/建命令
+  D->>G: ring doorbell
+  G->>G: 执行
+  G-->>D: IRQ
+  D-->>A: fence signaled
+      </div><figcaption>提交是异步的；正确性靠 fence 与内存屏障，不靠 sleep。</figcaption><details><summary>图源</summary><pre>sequenceDiagram
+  app->>drm: exec
+  drm->>gpu: submit
+  gpu-->>drm: irq
+  drm-->>app: fence</pre></details></figure>
+  <p>现代 GPU 还涉及 firmware、power/runtime PM、reset、SR-IOV/虚拟化、display audio。上游驱动可读 <code>drivers/gpu/drm/</code> 下的 <code>i915</code>、<code>amdgpu</code>、<code>msm</code>、<code>virtio</code>。</p>
+</div>
+
+<div class="gate"><div class="gate-step"><div class="gate-step-head"><span class="step-num">1</span><h4>检查理解</h4><span class="gate-time">≈2 分钟 · 不计分</span></div>
+<fieldset class="mc" data-mc><legend><span class="qnum">1.</span>GEM 主要管理：</legend>
+<label class="opt" data-correct="0"><input type="radio" name="advg-q1" value="a"><span><span class="opt-key">A</span> 显示时序<span class="opt-why">那是 KMS。</span><span class="mark"></span></span></label>
+<label class="opt" data-correct="1"><input type="radio" name="advg-q1" value="b"><span><span class="opt-key">B</span> GPU buffer object / 内存<span class="opt-why">对。TTM 负责迁移与放置。</span><span class="mark"></span></span></label>
+<label class="opt" data-correct="0"><input type="radio" name="advg-q1" value="c"><span><span class="opt-key">C</span> 中断控制器<span class="opt-why">与 GEM 无关。</span><span class="mark"></span></span></label>
+<div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div><p class="mc-result" aria-live="polite"></p><p class="mc-why" hidden>GEM/TTM 是 GPU 内存管理。</p></fieldset>
+<fieldset class="mc" data-mc><legend><span class="qnum">2.</span>fence 的作用是：</legend>
+<label class="opt" data-correct="0"><input type="radio" name="advg-q2" value="a"><span><span class="opt-key">A</span> 阻止 CPU 访问<span class="opt-why">不是通用屏障。</span><span class="mark"></span></span></label>
+<label class="opt" data-correct="1"><input type="radio" name="advg-q2" value="b"><span><span class="opt-key">B</span> 表示异步工作何时完成<span class="opt-why">对。可等待/轮询/链式依赖。</span><span class="mark"></span></span></label>
+<label class="opt" data-correct="0"><input type="radio" name="advg-q2" value="c"><span><span class="opt-key">C</span> 分配显存<span class="opt-why">那是 BO。</span><span class="mark"></span></span></label>
+<div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div><p class="mc-result" aria-live="polite"></p><p class="mc-why" hidden>GPU 是异步设备，必须有完成通知。</p></fieldset>
+<fieldset class="mc" data-mc><legend><span class="qnum">3.</span>GPU 页表与 CPU 页表：</legend>
+<label class="opt" data-correct="0"><input type="radio" name="advg-q3" value="a"><span><span class="opt-key">A</span> 完全同一套<span class="opt-why">GPU 有自己的页表/MMU。</span><span class="mark"></span></span></label>
+<label class="opt" data-correct="1"><input type="radio" name="advg-q3" value="b"><span><span class="opt-key">B</span> 分离，靠 IOMMU/SMMU 与驱动绑定<span class="opt-why">对。地址空间与映射由驱动管理。</span><span class="mark"></span></span></label>
+<label class="opt" data-correct="0"><input type="radio" name="advg-q3" value="c"><span><span class="opt-key">C</span> GPU 不需要页表<span class="opt-why">需要。</span><span class="mark"></span></span></label>
+<div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div><p class="mc-result" aria-live="polite"></p><p class="mc-why" hidden>GPU MMU 是驱动/硬件的一部分。</p></fieldset>
+</div><div class="gate-step"><div class="gate-step-head"><span class="step-num">2</span><h4>用自己的话解释</h4><span class="gate-time">≈4 分钟 · 本地保存</span></div>
+<div class="sa" data-sa="adv-gpu-1"><label class="sa-label" for="sa-adv-gpu-1">用 3 句话解释：一次 GPU 提交为什么必须返回 fence？GEM 与 KMS 各解决什么问题？</label><textarea id="sa-adv-gpu-1" rows="4" placeholder="异步、完成通知、内存 vs 显示……"></textarea><div class="sa-meta"><span class="wordcount">0 字</span><span class="save-status" aria-live="polite"></span><span class="spacer"></span><button type="button" class="textbtn" data-clear>清空</button></div><div class="sa-actions"><button type="button" class="btn secondary small" data-reveal>查看参考答案</button><button type="button" class="textbtn" data-stuck>我卡住了</button><button type="button" class="textbtn" data-copy-mine>复制我的答案</button></div>
+<div class="model" hidden><span class="model-kicker">参考答案</span><p>GPU 执行是异步的，CPU 提交后不能立刻认为完成；fence 提供完成通知与依赖链，让应用/驱动知道何时可以复用内存或显示。GEM/TTM 管理 buffer object 的分配、放置与迁移；KMS 管理 connector/crtc/plane/framebuffer 与显示时序。两者一个管“算”，一个管“显示”。</p></div>
+<div class="selfcheck" aria-label="自查"><label><input type="checkbox"> 我说明 GPU 异步与完成通知。</label><label><input type="checkbox"> 我说明 fence 的依赖/复用作用。</label><label><input type="checkbox"> 我区分 GEM 内存与 KMS 显示。</label></div></div></div></div>
+
+<div class="lab project"><div class="lab-head"><div class="lab-kicker">P5 · 30–50 小时</div><h3>最小 DRM/KMS 驱动</h3><p class="lab-sub">基于 virtio-gpu 或虚拟显示设备，实现 connector/crtc/plane/framebuffer、page flip、一个 GEM BO 与 fence。</p></div><div class="lab-body"><p>交付：可加载驱动、modetest 输出、page flip 日志、内存/fence 设计、dmesg。</p></div></div>
+</section></div></section>
+
+<section class="module" id="adv-virt" data-num="20" data-part="Part III · 系统工程" data-title="KVM 与 virtio">
+<div class="wrap"><header class="module-head"><div class="module-num">20</div><h2>KVM 与 virtio</h2><p class="lede">虚拟化不是“模拟一台机器”，而是把 CPU、内存、设备访问切成可陷入/可共享的路径。KVM 管 CPU/内存，virtio 管设备。</p></header>
+<section class="section" id="adv-virt-1" data-title="20.1 一次 VM exit 与 virtqueue" data-read="9" data-check="6" data-next="下一章：性能与 eBPF">
+<span class="section-label">模块 20 · 小节 1</span><h3>一次 VM exit 与 virtqueue</h3><span class="timechip">阅读 ≈9 分钟 · 检查 ≈6 分钟</span>
+
+<div class="ask" data-ask><p class="q"><span class="tag">先问</span>VM 里的网卡是“真网卡”吗？</p><button type="button" class="textbtn">先想 10 秒，再看</button><div class="a" hidden><p>通常是 virtio 虚拟设备：guest 驱动与 host vhost/设备模型共享 ring，不是直接 passthrough。</p></div></div>
+
+<div class="screen">
+  <p>KVM 利用 VT-x/AMD-V 让 guest 直接跑；敏感指令触发 VM exit 回到 host KVM。内存靠 EPT/NPT 二级页表。设备靠 virtio ring 共享。</p>
+  <figure class="diagram"><div class="diagram-note">KVM 路径</div><div class="mermaid">
+flowchart LR
+  G["guest 代码"] -->|"敏感指令"| X["VM exit"]
+  X --> K["KVM / QEMU"]
+  K -->|"VM entry"| G
+  G -->|"MMIO/PIO"| Q["QEMU 设备模型"]
+  Q -->|"virtqueue"| V["vhost / 驱动"]
+      </div><figcaption>CPU 虚拟化是陷入/返回；设备 I/O 还多一条共享 ring 的快路径。</figcaption><details><summary>图源</summary><pre>flowchart LR
+  guest -->|exit| kvm -->|entry| guest
+  guest -->|mmio| qemu --> virtqueue</pre></details></figure>
+</div>
+
+<div class="screen">
+  <h4>virtio：共享内存的协议</h4>
+  <p>virtqueue 由 descriptor table、available ring、used ring 组成；guest 放请求，host 处理后写 used。vhost 把处理放进内核线程，减少 QEMU 往返。</p>
+  <figure class="diagram"><div class="diagram-note">virtqueue</div><div class="mermaid">
+flowchart LR
+  A["guest driver"] -->|"add buf"| AV["available ring"]
+  AV --> H["vhost / device"]
+  H -->|"used"| UR["used ring"]
+  UR -->|"irq / kick"| A
+      </div><figcaption>零拷贝的关键是共享 ring + 正确的内存屏障，不是“把包复制过去”。</figcaption><details><summary>图源</summary><pre>flowchart LR
+  guest --> avail --> host --> used --> guest</pre></details></figure>
+  <p>进阶：VFIO passthrough 把真设备交给 guest，靠 IOMMU 隔离；SR-IOV 把设备切成 VF。vhost-user 把数据面放到用户态。</p>
+</div>
+
+<div class="gate"><div class="gate-step"><div class="gate-step-head"><span class="step-num">1</span><h4>检查理解</h4><span class="gate-time">≈2 分钟 · 不计分</span></div>
+<fieldset class="mc" data-mc><legend><span class="qnum">1.</span>VM exit 发生在：</legend>
+<label class="opt" data-correct="0"><input type="radio" name="advv-q1" value="a"><span><span class="opt-key">A</span> 每条指令<span class="opt-why">大多数指令直接跑。</span><span class="mark"></span></span></label>
+<label class="opt" data-correct="1"><input type="radio" name="advv-q1" value="b"><span><span class="opt-key">B</span> 敏感/特权操作<span class="opt-why">对。KVM 处理后再 entry。</span><span class="mark"></span></span></label>
+<label class="opt" data-correct="0"><input type="radio" name="advv-q1" value="c"><span><span class="opt-key">C</span> 每次内存访问<span class="opt-why">EPT 硬件翻译。</span><span class="mark"></span></span></label>
+<div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div><p class="mc-result" aria-live="polite"></p><p class="mc-why" hidden>exit 越少，虚拟化开销越低。</p></fieldset>
+<fieldset class="mc" data-mc><legend><span class="qnum">2.</span>virtqueue 的核心是：</legend>
+<label class="opt" data-correct="0"><input type="radio" name="advv-q2" value="a"><span><span class="opt-key">A</span> 复制整个包<span class="opt-why">共享 ring 避免复制。</span><span class="mark"></span></span></label>
+<label class="opt" data-correct="1"><input type="radio" name="advv-q2" value="b"><span><span class="opt-key">B</span> 共享 descriptor/available/used ring<span class="opt-why">对。配 barrier。</span><span class="mark"></span></span></label>
+<label class="opt" data-correct="0"><input type="radio" name="advv-q2" value="c"><span><span class="opt-key">C</span> 一条 ioctl<span class="opt-why">不是。</span><span class="mark"></span></span></label>
+<div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div><p class="mc-result" aria-live="polite"></p><p class="mc-why" hidden>共享内存 + 通知，是 virtio 的性能来源。</p></fieldset>
+<fieldset class="mc" data-mc><legend><span class="qnum">3.</span>VFIO passthrough 依赖：</legend>
+<label class="opt" data-correct="0"><input type="radio" name="advv-q3" value="a"><span><span class="opt-key">A</span> 不需要 IOMMU<span class="opt-why">必须靠 IOMMU 隔离。</span><span class="mark"></span></span></label>
+<label class="opt" data-correct="1"><input type="radio" name="advv-q3" value="b"><span><span class="opt-key">B</span> IOMMU 把设备 DMA 限制在 guest 映射<span class="opt-why">对。否则设备可写宿主内存。</span><span class="mark"></span></span></label>
+<label class="opt" data-correct="0"><input type="radio" name="advv-q3" value="c"><span><span class="opt-key">C</span> 关闭 EPT<span class="opt-why">无关。</span><span class="mark"></span></span></label>
+<div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div><p class="mc-result" aria-live="polite"></p><p class="mc-why" hidden>passthrough 的性能与风险都来自直通。</p></fieldset>
+</div><div class="gate-step"><div class="gate-step-head"><span class="step-num">2</span><h4>用自己的话解释</h4><span class="gate-time">≈4 分钟 · 本地保存</span></div>
+<div class="sa" data-sa="adv-virt-1"><label class="sa-label" for="sa-adv-virt-1">用 3 句话解释：virtio 为什么比全模拟设备快？VM exit 与 virtqueue 各在什么时候发生？</label><textarea id="sa-adv-virt-1" rows="4" placeholder="共享 ring、减少 exit、vhost……"></textarea><div class="sa-meta"><span class="wordcount">0 字</span><span class="save-status" aria-live="polite"></span><span class="spacer"></span><button type="button" class="textbtn" data-clear>清空</button></div><div class="sa-actions"><button type="button" class="btn secondary small" data-reveal>查看参考答案</button><button type="button" class="textbtn" data-stuck>我卡住了</button><button type="button" class="textbtn" data-copy-mine>复制我的答案</button></div>
+<div class="model" hidden><span class="model-kicker">参考答案</span><p>全模拟设备每次 I/O 都要 VM exit 到 QEMU 逐寄存器处理，开销大。virtio 用共享内存 ring 批量传递请求/完成，guest 与 host 只在通知时陷入，vhost 还能把数据面放进内核线程。VM exit 发生在敏感指令或 MMIO 访问；virtqueue 在 guest 添加 buffer、host 处理并写 used 时使用。</p></div>
+<div class="selfcheck" aria-label="自查"><label><input type="checkbox"> 我说明全模拟的 exit 开销。</label><label><input type="checkbox"> 我说明共享 ring 批量传递。</label><label><input type="checkbox"> 我说明 vhost/通知路径。</label></div></div></div></div>
+
+<div class="lab project"><div class="lab-head"><div class="lab-kicker">P6 · 20–30 小时</div><h3>virtio 设备 + guest 驱动</h3><p class="lab-sub">用 vhost-user 或 QEMU 实现一个最小 virtio 设备（如 ping 设备），guest 侧写驱动，验证 ring 与中断。</p></div><div class="lab-body"><p>交付：设备、驱动、virtqueue 图、压测、错误路径。</p></div></div>
+</section></div></section>
+
+<section class="module" id="adv-perf" data-num="21" data-part="Part III · 系统工程" data-title="性能与 eBPF">
+<div class="wrap"><header class="module-head"><div class="module-num">21</div><h2>性能与 eBPF</h2><p class="lede">内核性能不是“看 top”。要能问：时间花在 CPU、锁、内存、I/O 还是调度？perf/ftrace/eBPF 是三层不同粒度。</p></header>
+<section class="section" id="adv-perf-1" data-title="21.1 从火焰图到 sched_ext" data-read="9" data-check="6" data-next="下一章：安全与上游">
+<span class="section-label">模块 21 · 小节 1</span><h3>从火焰图到 sched_ext</h3><span class="timechip">阅读 ≈9 分钟 · 检查 ≈6 分钟</span>
+
+<div class="ask" data-ask><p class="q"><span class="tag">先问</span>CPU 很忙但吞吐不涨，先看什么？</p><button type="button" class="textbtn">先想 10 秒，再看</button><div class="a" hidden><p>先看忙在哪：用户态/内核态、锁、cache miss、调度延迟；用 perf 火焰图与 off-CPU 分析。</p></div></div>
+
+<div class="screen">
+  <p>perf 采样硬件/软件事件；ftrace 跟踪函数与延迟；eBPF 在内核钩子上安全执行小程序。三者回答不同问题：谁热、谁慢、为什么。</p>
+  <figure class="diagram"><div class="diagram-note">观测三层</div><div class="mermaid">
+flowchart LR
+  A["perf<br/>采样/火焰图"] --> Q1["哪里热？"]
+  B["ftrace<br/>函数/延迟"] --> Q2["调用链多长？"]
+  C["eBPF/bpftrace<br/>事件/聚合"] --> Q3["为什么、谁在等？"]
+      </div><figcaption>先问问题，再选工具；不要一上来就抓全量 trace。</figcaption><details><summary>图源</summary><pre>flowchart LR
+  perf --> hot
+  ftrace --> latency
+  ebpf --> why</pre></details></figure>
+      <div class="code"><div class="code-head"><span>常用入口</span></div><pre><code>perf top
+perf record -g -p PID; perf report
+trace-cmd record -p function_graph
+bpftrace -e 'kprobe:vfs_read { @[comm] = count(); }'</code></pre></div>
+</div>
+
+<div class="screen">
+  <h4>调度与 eBPF 的边界</h4>
+  <p><code>sched_ext</code> 允许用 BPF 写调度器；XDP/tc 在网络路径上可编程。它们强大，但受 verifier 与内核版本限制。</p>
+  <figure class="diagram"><div class="diagram-note">eBPF 钩子</div><div class="mermaid">
+flowchart LR
+  P["程序"] --> V["verifier"]
+  V -->|"通过"| J["JIT"]
+  J --> H1["kprobe/tracepoint"]
+  J --> H2["XDP/tc"]
+  J --> H3["sched_ext"]
+      </div><figcaption>verifier 先证明安全，JIT 再执行；不是任意内核代码。</figcaption><details><summary>图源</summary><pre>flowchart LR
+  prog --> verifier --> jit --> hooks</pre></details></figure>
+  <p>性能结论必须有 baseline、对照与噪声评估。<code>perf stat</code> 看 IPC/cache miss，火焰图看热点，off-CPU 看阻塞；三者合起来才是证据。</p>
+</div>
+
+<div class="gate"><div class="gate-step"><div class="gate-step-head"><span class="step-num">1</span><h4>检查理解</h4><span class="gate-time">≈2 分钟 · 不计分</span></div>
+<fieldset class="mc" data-mc><legend><span class="qnum">1.</span>火焰图主要回答：</legend>
+<label class="opt" data-correct="0"><input type="radio" name="advf-q1" value="a"><span><span class="opt-key">A</span> 谁在等锁<span class="opt-why">off-CPU/锁分析更直接。</span><span class="mark"></span></span></label>
+<label class="opt" data-correct="1"><input type="radio" name="advf-q1" value="b"><span><span class="opt-key">B</span> CPU 时间花在哪些调用栈<span class="opt-why">对。采样堆栈聚合。</span><span class="mark"></span></span></label>
+<label class="opt" data-correct="0"><input type="radio" name="advf-q1" value="c"><span><span class="opt-key">C</span> 内存泄漏<span class="opt-why">不是。</span><span class="mark"></span></span></label>
+<div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div><p class="mc-result" aria-live="polite"></p><p class="mc-why" hidden>火焰图是 on-CPU 热点。</p></fieldset>
+<fieldset class="mc" data-mc><legend><span class="qnum">2.</span>eBPF 程序执行前必须：</legend>
+<label class="opt" data-correct="0"><input type="radio" name="advf-q2" value="a"><span><span class="opt-key">A</span> 编译进内核<span class="opt-why">可动态加载。</span><span class="mark"></span></span></label>
+<label class="opt" data-correct="1"><input type="radio" name="advf-q2" value="b"><span><span class="opt-key">B</span> 通过 verifier<span class="opt-why">对。内存/控制流安全。</span><span class="mark"></span></span></label>
+<label class="opt" data-correct="0"><input type="radio" name="advf-q2" value="c"><span><span class="opt-key">C</span> 关中断<span class="opt-why">不需要。</span><span class="mark"></span></span></label>
+<div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div><p class="mc-result" aria-live="polite"></p><p class="mc-why" hidden>verifier 是安全边界。</p></fieldset>
+<fieldset class="mc" data-mc><legend><span class="qnum">3.</span>判断性能改动是否有效，必须有：</legend>
+<label class="opt" data-correct="0"><input type="radio" name="advf-q3" value="a"><span><span class="opt-key">A</span> 一次感觉更快的运行<span class="opt-why">噪声会骗人。</span><span class="mark"></span></span></label>
+<label class="opt" data-correct="1"><input type="radio" name="advf-q3" value="b"><span><span class="opt-key">B</span> baseline、对照、重复与统计<span class="opt-why">对。否则不是证据。</span><span class="mark"></span></span></label>
+<label class="opt" data-correct="0"><input type="radio" name="advf-q3" value="c"><span><span class="opt-key">C</span> 更高 CPU 占用<span class="opt-why">不是目标。</span><span class="mark"></span></span></label>
+<div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div><p class="mc-result" aria-live="polite"></p><p class="mc-why" hidden>性能是实验科学。</p></fieldset>
+</div><div class="gate-step"><div class="gate-step-head"><span class="step-num">2</span><h4>用自己的话解释</h4><span class="gate-time">≈4 分钟 · 本地保存</span></div>
+<div class="sa" data-sa="adv-perf-1"><label class="sa-label" for="sa-adv-perf-1">用 3 句话说明 perf、ftrace、eBPF 各回答什么问题；为什么不能只凭一次运行说“更快”。</label><textarea id="sa-adv-perf-1" rows="4" placeholder="hot / latency / why……"></textarea><div class="sa-meta"><span class="wordcount">0 字</span><span class="save-status" aria-live="polite"></span><span class="spacer"></span><button type="button" class="textbtn" data-clear>清空</button></div><div class="sa-actions"><button type="button" class="btn secondary small" data-reveal>查看参考答案</button><button type="button" class="textbtn" data-stuck>我卡住了</button><button type="button" class="textbtn" data-copy-mine>复制我的答案</button></div>
+<div class="model" hidden><span class="model-kicker">参考答案</span><p>perf 采样回答“CPU 时间花在哪些栈/事件”，ftrace 回答“函数调用链与延迟”，eBPF 回答“特定事件上谁在做什么、为什么等”。一次运行可能受缓存、噪声、频率影响；必须有 baseline、对照组、重复与统计，才能把差异归因到改动。</p></div>
+<div class="selfcheck" aria-label="自查"><label><input type="checkbox"> 我区分三种工具的问题。</label><label><input type="checkbox"> 我说明采样 vs 跟踪 vs 可编程钩子。</label><label><input type="checkbox"> 我强调 baseline/统计。</label></div></div></div></div>
+
+<div class="lab project"><div class="lab-head"><div class="lab-kicker">P7 · 15–25 小时</div><h3>定位一个真实性能回归</h3><p class="lab-sub">选一个可复现负载，用 perf/ftrace/bpftrace 找根因，做修复或调优，给出前后对比与火焰图。</p></div><div class="lab-body"><p>交付：负载脚本、baseline、火焰图、off-CPU 分析、修复、统计显著性。</p></div></div>
+</section></div></section>
+
+<section class="module" id="adv-sec" data-num="22" data-part="Part III · 系统工程" data-title="安全、测试与上游">
+<div class="wrap"><header class="module-head"><div class="module-num">22</div><h2>安全、测试与上游</h2><p class="lede">能把驱动跑起来只是开始；能证明它安全、可回归、可 review、能进上游，才是工程能力。</p></header>
+<section class="section" id="adv-sec-1" data-title="22.1 LSM、KASAN、syzkaller 与 patch" data-read="9" data-check="6" data-next="回到项目">
+<span class="section-label">模块 22 · 小节 1</span><h3>LSM、KASAN、syzkaller 与 patch</h3><span class="timechip">阅读 ≈9 分钟 · 检查 ≈6 分钟</span>
+
+<div class="ask" data-ask><p class="q"><span class="tag">先问</span>内核补丁“能编译”就够了吗？</p><button type="button" class="textbtn">先想 10 秒，再看</button><div class="a" hidden><p>不够。要过 checkpatch、编译/启动测试、KASAN/lockdep、fuzz、review，且说明并发/生命周期。</p></div></div>
+
+<div class="screen">
+  <p>安全是分层叠加：LSM（SELinux/AppArmor）做策略，seccomp 限 syscall，capabilities 限特权，KASAN/KCSAN/lockdep 抓实现 bug。</p>
+  <figure class="diagram"><div class="diagram-note">安全层次</div><div class="mermaid">
+flowchart TB
+  A["应用"] --> S["seccomp / caps"]
+  S --> L["LSM: SELinux / AppArmor"]
+  L --> K["内核对象/权限检查"]
+  K --> H["硬件: IOMMU / SMEP / SMAP"]
+      </div><figcaption>没有单点“安全”；每层都假设上一层可能失守。</figcaption><details><summary>图源</summary><pre>flowchart TB
+  app --> seccomp --> lsm --> kernel --> hw</pre></details></figure>
+</div>
+
+<div class="screen">
+  <h4>测试与上游</h4>
+  <p>内核测试组合：编译矩阵、boot、kselftest、KUnit、syzkaller、KASAN/KCSAN、lockdep。补丁流程：checkpatch → build/boot → 说明 → mailing list → review → 重发。</p>
+  <figure class="diagram"><div class="diagram-note">补丁生命周期</div><div class="mermaid">
+flowchart LR
+  B["bug / feature"] --> P["patch"]
+  P --> C["checkpatch"]
+  C --> T["build + boot + test"]
+  T --> M["mailing list"]
+  M --> R["review"]
+  R -->|"修改"| P
+  R -->|"接受"| U["upstream"]
+      </div><figcaption>review 是流程的一部分，不是障碍；每个版本要写 changelog。</figcaption><details><summary>图源</summary><pre>flowchart LR
+  patch --> checkpatch --> test --> mail --> review --> upstream</pre></details></figure>
+  <p>新手最稳的入口：syzkaller/syzbot 报告、文档修正、小驱动 bug；先读 <code>Documentation/process/</code>，再发 patch。</p>
+</div>
+
+<div class="gate"><div class="gate-step"><div class="gate-step-head"><span class="step-num">1</span><h4>检查理解</h4><span class="gate-time">≈2 分钟 · 不计分</span></div>
+<fieldset class="mc" data-mc><legend><span class="qnum">1.</span>KASAN 主要发现：</legend>
+<label class="opt" data-correct="0"><input type="radio" name="advs-q1" value="a"><span><span class="opt-key">A</span> 逻辑 bug<span class="opt-why">它抓内存错误。</span><span class="mark"></span></span></label>
+<label class="opt" data-correct="1"><input type="radio" name="advs-q1" value="b"><span><span class="opt-key">B</span> 越界/use-after-free<span class="opt-why">对。影子内存检查。</span><span class="mark"></span></span></label>
+<label class="opt" data-correct="0"><input type="radio" name="advs-q1" value="c"><span><span class="opt-key">C</span> 锁顺序<span class="opt-why">lockdep。</span><span class="mark"></span></span></label>
+<div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div><p class="mc-result" aria-live="polite"></p><p class="mc-why" hidden>KASAN 需要编译时开启。</p></fieldset>
+<fieldset class="mc" data-mc><legend><span class="qnum">2.</span>seccomp 限制：</legend>
+<label class="opt" data-correct="0"><input type="radio" name="advs-q2" value="a"><span><span class="opt-key">A</span> CPU 时间<span class="opt-why">cgroup。</span><span class="mark"></span></span></label>
+<label class="opt" data-correct="1"><input type="radio" name="advs-q2" value="b"><span><span class="opt-key">B</span> 可调用的 syscall<span class="opt-why">对。可 return errno/trap。</span><span class="mark"></span></span></label>
+<label class="opt" data-correct="0"><input type="radio" name="advs-q2" value="c"><span><span class="opt-key">C</span> 文件权限<span class="opt-why">LSM/权限位。</span><span class="mark"></span></span></label>
+<div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div><p class="mc-result" aria-live="polite"></p><p class="mc-why" hidden>seccomp 是 syscall 白名单。</p></fieldset>
+<fieldset class="mc" data-mc><legend><span class="qnum">3.</span>上游 patch 最少要包含：</legend>
+<label class="opt" data-correct="0"><input type="radio" name="advs-q3" value="a"><span><span class="opt-key">A</span> 只有 diff<span class="opt-why">还要说明/测试。</span><span class="mark"></span></span></label>
+<label class="opt" data-correct="1"><input type="radio" name="advs-q3" value="b"><span><span class="opt-key">B</span> diff + 清楚的 changelog + 测试证据<span class="opt-why">对。review 才能判断。</span><span class="mark"></span></span></label>
+<label class="opt" data-correct="0"><input type="radio" name="advs-q3" value="c"><span><span class="opt-key">C</span> 越大的重构越好<span class="opt-why">小步更容易 review。</span><span class="mark"></span></span></label>
+<div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div><p class="mc-result" aria-live="polite"></p><p class="mc-why" hidden>补丁是论证，不只是代码。</p></fieldset>
+</div><div class="gate-step"><div class="gate-step-head"><span class="step-num">2</span><h4>用自己的话解释</h4><span class="gate-time">≈4 分钟 · 本地保存</span></div>
+<div class="sa" data-sa="adv-sec-1"><label class="sa-label" for="sa-adv-sec-1">用 3 句话说明：为什么“能编译/能跑”不足以证明内核补丁正确？列出你会在 patch 里提供的证据。</label><textarea id="sa-adv-sec-1" rows="4" placeholder="KASAN/lockdep/测试/review……"></textarea><div class="sa-meta"><span class="wordcount">0 字</span><span class="save-status" aria-live="polite"></span><span class="spacer"></span><button type="button" class="textbtn" data-clear>清空</button></div><div class="sa-actions"><button type="button" class="btn secondary small" data-reveal>查看参考答案</button><button type="button" class="textbtn" data-stuck>我卡住了</button><button type="button" class="textbtn" data-copy-mine>复制我的答案</button></div>
+<div class="model" hidden><span class="model-kicker">参考答案</span><p>内核 bug 常出现在并发、生命周期、错误路径与边界，编译和一次运行覆盖不到。补丁应说明问题与根因、并发/内存模型、测试（KUnit/kselftest/实际设备）、KASAN/lockdep 结果、失败路径与回滚，并保持小步、可 review。</p></div>
+<div class="selfcheck" aria-label="自查"><label><input type="checkbox"> 我说明并发/生命周期风险。</label><label><input type="checkbox"> 我列出测试与 sanitizer 证据。</label><label><input type="checkbox"> 我说明 changelog/小步 patch。</label></div></div></div></div>
+
+<div class="lab project"><div class="lab-head"><div class="lab-kicker">P8 · 20–40 小时</div><h3>一个真实 upstream patch</h3><p class="lab-sub">从 syzbot/邮件列表/文档找一个小问题，修、测、过 checkpatch，发到对应 mailing list 并处理 review。</p></div><div class="lab-body"><p>交付：patch series、测试、mail 链接、review 回复、最终状态。</p></div></div>
+</section></div></section>
 
   </main>
 </div>
