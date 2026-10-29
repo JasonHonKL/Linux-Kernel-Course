@@ -13,14 +13,14 @@
 <body>
 <header class="topnav">
   <div class="brand"><span class="brand-mark"></span>Linux 全景</div>
-  <div class="navmeta">linux 7.3 · 10 模块 · 11+1 实验 · ≈14 小时</div>
+  <div class="navmeta">linux 7.3 · 14 模块 · 11+1 实验 · ≈16 小时</div>
   <nav class="navlinks" aria-label="课程导航">
+    <a href="#boot">启动</a>
     <a href="#f1">文件</a>
-    <a href="#f2">passwd</a>
-    <a href="#f3">进程</a>
-    <a href="#f4">mmap</a>
+    <a href="#f2">用户</a>
+    <a href="#f4">内存</a>
     <a href="#m2">网络</a>
-    <a href="#capstone">Capstone</a>
+    <a href="#containers">容器</a>
   </nav>
 </header>
 <div class="progress-track" aria-hidden="true"><div class="progress-bar" id="progressBar"></div></div>
@@ -41,10 +41,10 @@
   <h1>Linux 全景：<br>从 passwd 到网络栈</h1>
   <p class="lede">先问：登录时密码去哪了？<code>mmap</code> 为什么不立刻读文件？硬链接为什么共享 inode？从文件、用户、进程、内存一路问到 socket、路由与 XDP。</p>
   <div class="meta-row">
-    <span><strong>10</strong> 个模块</span>
-    <span><strong>16</strong> 个小节</span>
+    <span><strong>14</strong> 个模块</span>
+    <span><strong>20</strong> 个小节</span>
     <span><strong>11+1</strong> 个实验</span>
-    <span><strong>≈14</strong> 小时</span>
+    <span><strong>≈16</strong> 小时</span>
     <span>轨道：<strong>Deep Diver</strong></span>
   </div>
 
@@ -73,11 +73,10 @@
     <div class="diagram-note">课程地图</div>
     <div class="mermaid">
 flowchart LR
-  A["文件 / inode"] --> B["passwd / 权限"]
-  B --> C["进程 / systemd"]
-  C --> D["内存 / mmap"]
-  D --> E["socket / 路由"]
-  E --> F["容器 / 模块 / XDP"]
+  A["启动 / Shell"] --> B["文件 / 用户"]
+  B --> C["进程 / mmap"]
+  C --> D["存储 / 网络"]
+  D --> E["容器 / 模块 / XDP"]
     </div>
     <figcaption>先练内核 C 与地址，再沿一条发送路径向下；每个盒子都有可运行的实验。</figcaption>
     <details><summary>图源</summary><pre>flowchart LR
@@ -103,16 +102,282 @@ flowchart LR
 </section>
 </div>
 
-<section class="module" id="f1" data-num="A" data-title="文件、inode 与挂载">
+<section class="module" id="boot" data-num="1" data-title="开机与启动">
 <div class="wrap">
   <header class="module-head">
-    <div class="module-num">A</div>
+    <div class="module-num">01</div>
+    <h2>开机与启动</h2>
+    <p class="lede">从按下电源到看到登录提示符，中间至少有五棒：固件、引导器、内核、initramfs、init/systemd。每一棒失败，现象完全不同。</p>
+  </header>
+
+  <section class="section" id="boot-1" data-title="1.1 五棒接力" data-read="7" data-check="5" data-next="下一节：Shell 与文本">
+    <span class="section-label">模块 1 · 小节 1</span>
+    <h3>五棒接力</h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
+
+    <div class="ask" data-ask>
+      <p class="q"><span class="tag">先问</span>内核启动后，第一个用户态进程通常是？</p>
+      <button type="button" class="textbtn">先想 10 秒，再看</button>
+      <div class="a" hidden><p>PID 1，现代发行版通常是 <code>systemd</code>；它再拉起 target、服务和登录。</p></div>
+    </div>
+
+    <div class="screen">
+      <p>固件找到引导器；引导器加载内核与 initramfs；内核挂载根文件系统并执行 PID 1；systemd 进入 target，最后 getty/sshd 给你登录。</p>
+      <figure class="diagram">
+        <div class="diagram-note">启动链</div>
+        <div class="mermaid">
+flowchart LR
+  F["UEFI / BIOS"] --> B["GRUB / systemd-boot"]
+  B --> K["kernel + initramfs"]
+  K --> R["挂载根文件系统"]
+  R --> S["PID 1: systemd"]
+  S --> T["multi-user.target"]
+  T --> L["getty / sshd"]
+        </div>
+        <figcaption>initramfs 是“临时小系统”，负责找到并挂载真正的根；找不到就进 emergency shell。</figcaption>
+        <details><summary>图源</summary><pre>flowchart LR
+  firmware --> bootloader --> kernel --> rootfs --> systemd --> login</pre></details>
+      </figure>
+      <p>常见故障分层：固件找不到盘 → 引导器菜单；引导器找不到内核 → grub rescue；内核找不到根 → initramfs/emergency；systemd 服务失败 → degraded。</p>
+    </div>
+
+    <div class="micro" data-micro data-good="b">
+      <p class="micro-q"><span class="tag">预测</span>根文件系统挂载失败，最可能停在哪？</p>
+      <div class="micro-actions">
+        <button data-pick="a">GRUB 菜单</button>
+        <button data-pick="b">initramfs / emergency shell</button>
+        <button data-pick="c">登录提示符</button>
+      </div>
+      <div class="micro-result" hidden data-msg-a="GRUB 阶段还没到根挂载。" data-msg-b="对。initramfs 负责找根，失败会给你一个最小 shell。"></div>
+    </div>
+
+    <div class="screen">
+      <h4>systemd 的 target 不是“运行级别”</h4>
+      <p>target 是一组 unit 的依赖集合。<code>multi-user.target</code> 表示多用户文本环境；<code>graphical.target</code> 再拉起显示管理器。用 <code>systemctl get-default</code> 看默认 target。</p>
+      <figure class="diagram">
+        <div class="diagram-note">unit 依赖</div>
+        <div class="mermaid">
+flowchart TB
+  G["graphical.target"] --> M["multi-user.target"]
+  M --> N["network-online.target"]
+  M --> S["sshd.service"]
+  M --> C["cron.service"]
+        </div>
+        <figcaption>target 把服务组织成依赖图；<code>systemctl list-dependencies</code> 能看到它。</figcaption>
+        <details><summary>图源</summary><pre>flowchart TB
+  graphical --> multi-user --> network-online
+  multi-user --> sshd</pre></details>
+      </figure>
+      <p>排障先分层，再看日志：<code>journalctl -b</code> 看本次启动；<code>systemctl --failed</code> 看失败单元；<code>systemd-analyze blame</code> 看谁拖慢启动。</p>
+    </div>
+
+    <div class="gate">
+      <div class="gate-step">
+        <div class="gate-step-head"><span class="step-num">1</span><h4>检查理解</h4><span class="gate-time">≈2 分钟 · 不计分</span></div>
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">1.</span>initramfs 的主要职责是：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="boot-q1" value="a"><span><span class="opt-key">A</span> 显示登录界面<span class="opt-why">那是 getty/显示管理器。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="boot-q1" value="b"><span><span class="opt-key">B</span> 提供临时环境，找到并挂载根<span class="opt-why">对。常带存储/加密驱动。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="boot-q1" value="c"><span><span class="opt-key">C</span> 编译内核<span class="opt-why">内核已由引导器加载。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>根挂载失败时，你通常就停在 initramfs 的 shell。</p>
+        </fieldset>
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">2.</span>PID 1 在现代发行版通常是：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="boot-q2" value="a"><span><span class="opt-key">A</span> bash<span class="opt-why">bash 是 PID 1 拉起的 shell。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="boot-q2" value="b"><span><span class="opt-key">B</span> systemd<span class="opt-why">对。它负责服务、target、日志与 cgroup。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="boot-q2" value="c"><span><span class="opt-key">C</span> kernel<span class="opt-why">kernel 不是用户态进程。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>PID 1 负责收尸、服务与启动顺序。</p>
+        </fieldset>
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">3.</span>看本次启动的日志用：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="boot-q3" value="a"><span><span class="opt-key">A</span> <code>dmesg</code><span class="opt-why">只有内核环形缓冲，不含用户态服务。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="boot-q3" value="b"><span><span class="opt-key">B</span> <code>journalctl -b</code><span class="opt-why">对。按 boot 过滤 systemd journal。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="boot-q3" value="c"><span><span class="opt-key">C</span> <code>last</code><span class="opt-why">登录记录，不是启动日志。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>先分层，再看对应日志。</p>
+        </fieldset>
+      </div>
+      <div class="gate-step">
+        <div class="gate-step-head"><span class="step-num">2</span><h4>用自己的话解释</h4><span class="gate-time">≈3 分钟 · 本地保存</span></div>
+        <div class="sa" data-sa="boot-1">
+          <label class="sa-label" for="sa-boot-1">用 2–3 句话解释：为什么需要 initramfs，而不是让内核直接挂根？如果根挂载失败，你会先看哪一层？</label>
+          <textarea id="sa-boot-1" rows="4" placeholder="驱动、LVM、加密、initramfs shell……"></textarea>
+          <div class="sa-meta"><span class="wordcount">0 字</span><span class="save-status" aria-live="polite"></span><span class="spacer"></span><button type="button" class="textbtn" data-clear>清空</button></div>
+          <div class="sa-actions"><button type="button" class="btn secondary small" data-reveal>查看参考答案</button><button type="button" class="textbtn" data-stuck>我卡住了</button><button type="button" class="textbtn" data-copy-mine>复制我的答案</button></div>
+          <div class="model" hidden><span class="model-kicker">参考答案</span><p>根文件系统可能位于 LVM、RAID、加密盘或网络存储上，内核本身不一定带这些驱动/工具。initramfs 提供一个最小用户态，加载模块、解锁、组装设备，找到根后再 switch_root。若根挂载失败，通常停在 initramfs/emergency shell，先看那里的设备与挂载错误，再看内核日志。</p></div>
+          <div class="selfcheck" aria-label="自查"><label><input type="checkbox"> 我说明了根可能在复杂存储上。</label><label><input type="checkbox"> 我说明了 initramfs 提供驱动/工具。</label><label><input type="checkbox"> 我说出失败停在 initramfs 并看对应日志。</label></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tryit">
+      <div class="tryit-head"><span class="label">60 秒动手</span><span class="t">≈2 分钟</span></div>
+      <p>在 VM 里看本次启动的耗时与失败单元。</p>
+      <pre class="term">$ systemd-analyze
+$ systemd-analyze blame | head
+$ systemctl --failed
+$ journalctl -b -p err | tail</pre>
+      <details><summary>看预期输出</summary><pre class="term">Startup finished in 2.1s (kernel) + 4.3s (userspace) = 6.4s
+...
+0 loaded units listed.</pre></details>
+      <p class="tryit-note">先看时间花在 kernel 还是 userspace，再看具体 unit。</p>
+    </div>
+
+    <div class="recap"><h4>本小节可以带走</h4><ul><li>启动五棒：固件 → 引导器 → 内核/initramfs → 根 → systemd。</li><li>根挂载失败通常停在 initramfs。</li><li>日志分层：journalctl -b、systemctl --failed、dmesg。</li></ul></div>
+  </section>
+</div>
+</section>
+
+<section class="module" id="shell" data-num="2" data-title="Shell 与文本">
+<div class="wrap">
+  <header class="module-head">
+    <div class="module-num">02</div>
+    <h2>Shell 与文本</h2>
+    <p class="lede">Shell 不是“命令列表”，而是一个进程：它创建子进程、接管道、改 fd、传环境。看懂 fd 0/1/2 与退出码，才能读懂一半运维脚本。</p>
+  </header>
+
+  <section class="section" id="shell-1" data-title="2.1 管道、重定向与退出码" data-read="7" data-check="5" data-next="下一节：文件与 inode">
+    <span class="section-label">模块 2 · 小节 1</span>
+    <h3>管道、重定向与退出码</h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
+
+    <div class="ask" data-ask>
+      <p class="q"><span class="tag">先问</span><code>cmd &gt; out 2&gt;&amp;1</code> 与 <code>cmd 2&gt;&amp;1 &gt; out</code> 一样吗？</p>
+      <button type="button" class="textbtn">先想 10 秒，再看</button>
+      <div class="a" hidden><p>不一样。重定向按从左到右生效；第二种先把 stderr 指向旧 stdout（终端），再改 stdout 到文件。</p></div>
+    </div>
+
+    <div class="screen">
+      <p>每个进程默认有 fd 0（stdin）、1（stdout）、2（stderr）。<code>&gt;</code> 改 fd 1，<code>2&gt;</code> 改 fd 2，<code>|</code> 把前一个的 stdout 接到后一个的 stdin。</p>
+      <figure class="diagram">
+        <div class="diagram-note">管道与重定向</div>
+        <div class="mermaid">
+flowchart LR
+  A["cmd1"] -->|"stdout"| P["pipe"]
+  P -->|"stdin"| B["cmd2"]
+  A -->|"stderr"| T["终端"]
+  B -->|"stdout"| F["file"]
+        </div>
+        <figcaption>管道只接 stdout；stderr 仍然去终端，除非你显式重定向。</figcaption>
+        <details><summary>图源</summary><pre>flowchart LR
+  cmd1 -->|stdout| pipe --> cmd2 --> file
+  cmd1 -->|stderr| terminal</pre></details>
+      </figure>
+      <div class="code">
+        <div class="code-head"><span>fd 与重定向顺序</span></div>
+        <pre><code>cmd &gt; out 2&gt;&amp;1
+# 1) fd1 = out
+# 2) fd2 = 当前 fd1 = out
+
+cmd 2&gt;&amp;1 &gt; out
+# 1) fd2 = 当前 fd1 = 终端
+# 2) fd1 = out</code></pre>
+      </div>
+    </div>
+
+    <div class="micro" data-micro data-good="b">
+      <p class="micro-q"><span class="tag">预测</span>管道 <code>a | b</code> 的退出码默认取谁？</p>
+      <div class="micro-actions">
+        <button data-pick="a">a</button>
+        <button data-pick="b">b</button>
+        <button data-pick="c">两者相加</button>
+      </div>
+      <div class="micro-result" hidden data-msg-a="打开 pipefail 才是这样。" data-msg-b="对。默认取最后一个命令；Bash 可开 <code>set -o pipefail</code>。"></div>
+    </div>
+
+    <div class="screen">
+      <h4>环境与退出码</h4>
+      <p>环境变量在 fork 时复制，exec 后保留；<code>export</code> 只是把它放进传给子进程的环境。退出码 0 表示成功，非 0 的含义由程序决定。</p>
+      <figure class="diagram">
+        <div class="diagram-note">环境继承</div>
+        <div class="mermaid">
+flowchart LR
+  S["shell<br/>PATH/EDITOR"] -->|"fork"| C["子进程<br/>复制 env"]
+  C -->|"exec"| P["程序<br/>读取 env"]
+  P -->|"exit code"| S
+        </div>
+        <figcaption>export 的变量才会进入子进程环境；未 export 的只是 shell 变量。</figcaption>
+        <details><summary>图源</summary><pre>flowchart LR
+  shell -->|fork| child -->|exec| program
+  program -->|exit| shell</pre></details>
+      </figure>
+      <p>脚本第一行 <code>set -euo pipefail</code> 不是万能：<code>-e</code> 有例外，<code>pipefail</code> 只改管道。理解语义再开，不要盲抄。</p>
+    </div>
+
+    <div class="gate">
+      <div class="gate-step">
+        <div class="gate-step-head"><span class="step-num">1</span><h4>检查理解</h4><span class="gate-time">≈2 分钟 · 不计分</span></div>
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">1.</span><code>cmd &gt; out 2&gt;&amp;1</code> 的效果是：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="shell-q1" value="a"><span><span class="opt-key">A</span> stderr 去终端，stdout 去文件<span class="opt-why">2&gt;&amp;1 在 &gt; 之后，stderr 跟随 stdout。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="shell-q1" value="b"><span><span class="opt-key">B</span> stdout 与 stderr 都去文件<span class="opt-why">对。顺序决定跟随的是哪个 fd。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="shell-q1" value="c"><span><span class="opt-key">C</span> 两者都去终端<span class="opt-why">stdout 已改到文件。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>重定向从左到右，顺序就是语义。</p>
+        </fieldset>
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">2.</span>管道默认的退出码：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="shell-q2" value="a"><span><span class="opt-key">A</span> 第一个命令<span class="opt-why">默认不是。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="shell-q2" value="b"><span><span class="opt-key">B</span> 最后一个命令<span class="opt-why">对。pipefail 才考虑前面。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="shell-q2" value="c"><span><span class="opt-key">C</span> 两者最大值<span class="opt-why">不是这样。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>这也是管道吞错误的原因。</p>
+        </fieldset>
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">3.</span><code>export FOO=bar</code> 的作用是：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="shell-q3" value="a"><span><span class="opt-key">A</span> 写进 /etc/environment<span class="opt-why">只影响当前 shell 及子进程。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="shell-q3" value="b"><span><span class="opt-key">B</span> 放进传给子进程的环境<span class="opt-why">对。未 export 只是 shell 变量。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="shell-q3" value="c"><span><span class="opt-key">C</span> 全局永久生效<span class="opt-why">退出 shell 就没了。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>环境变量是 fork/exec 的继承，不是全局数据库。</p>
+        </fieldset>
+      </div>
+      <div class="gate-step">
+        <div class="gate-step-head"><span class="step-num">2</span><h4>用自己的话解释</h4><span class="gate-time">≈3 分钟 · 本地保存</span></div>
+        <div class="sa" data-sa="shell-1">
+          <label class="sa-label" for="sa-shell-1">用 2–3 句话解释：为什么 <code>cmd &gt; out 2&gt;&amp;1</code> 和 <code>cmd 2&gt;&amp;1 &gt; out</code> 结果不同？这和 fd 的“复制”有什么关系？</label>
+          <textarea id="sa-shell-1" rows="4" placeholder="从左到右、fd 表复制……"></textarea>
+          <div class="sa-meta"><span class="wordcount">0 字</span><span class="save-status" aria-live="polite"></span><span class="spacer"></span><button type="button" class="textbtn" data-clear>清空</button></div>
+          <div class="sa-actions"><button type="button" class="btn secondary small" data-reveal>查看参考答案</button><button type="button" class="textbtn" data-stuck>我卡住了</button><button type="button" class="textbtn" data-copy-mine>复制我的答案</button></div>
+          <div class="model" hidden><span class="model-kicker">参考答案</span><p>重定向按从左到右修改 fd 表。<code>&gt; out</code> 先把 fd1 指向文件，随后 <code>2&gt;&amp;1</code> 让 fd2 复制当前 fd1，所以两者都进文件；反过来时 fd2 先复制终端，再把 fd1 改到文件，stderr 仍去终端。关键在于 <code>&amp;1</code> 复制的是“当时”的 fd1 指向。</p></div>
+          <div class="selfcheck" aria-label="自查"><label><input type="checkbox"> 我说明了从左到右生效。</label><label><input type="checkbox"> 我说明了 2&gt;&amp;1 复制当时的 fd1。</label><label><input type="checkbox"> 我给出了两种顺序的不同结果。</label></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tryit">
+      <div class="tryit-head"><span class="label">60 秒动手</span><span class="t">≈1 分钟</span></div>
+      <p>验证管道退出码与 stderr 的去向。</p>
+      <pre class="term">$ false | true; echo $?
+$ ( echo out; echo err &gt;&amp;2 ) &gt; /tmp/o 2&gt;&amp;1
+$ cat /tmp/o</pre>
+      <details><summary>看预期输出</summary><pre class="term">0
+out
+err</pre></details>
+      <p class="tryit-note">第一条是 0（最后一个命令）；第二条证明两者都进了文件。</p>
+    </div>
+
+    <div class="recap"><h4>本小节可以带走</h4><ul><li>fd 0/1/2；管道只接 stdout。</li><li>重定向从左到右，<code>2&gt;&amp;1</code> 复制当时的 fd1。</li><li>管道退出码默认取最后一个；环境变量靠 export 继承。</li></ul></div>
+  </section>
+</div>
+</section>
+
+<section class="module" id="f1" data-num="3" data-title="文件、inode 与挂载">
+<div class="wrap">
+  <header class="module-head">
+    <div class="module-num">03</div>
     <h2>文件、inode 与挂载</h2>
     <p class="lede">Linux 的“文件”不是文件名，而是 inode；目录只是“名字 → inode”的表。理解这一层，`ls -l`、硬链接、挂载、`df` 才不会互相打架。</p>
   </header>
 
   <section class="section" id="f1-1" data-title="A.1 文件名只是目录里的一行" data-read="7" data-check="5" data-next="下一节：用户与 passwd">
-    <span class="section-label">基础模块 · 小节 1</span>
+    <span class="section-label">模块 3 · 小节 1</span>
     <h3>文件名只是目录里的一行</h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
 
     <div class="ask" data-ask>
@@ -314,16 +579,16 @@ set -eu
 </div>
 </section>
 
-<section class="module" id="f2" data-num="B" data-title="用户、passwd 与权限">
+<section class="module" id="f2" data-num="4" data-title="用户、passwd 与权限">
 <div class="wrap">
   <header class="module-head">
-    <div class="module-num">B</div>
+    <div class="module-num">04</div>
     <h2>用户、<code>passwd</code> 与权限</h2>
     <p class="lede">登录不是“输入密码然后进 shell”。内核只认 UID/GID；密码哈希、账户状态、PAM 策略都在用户态文件与库里。</p>
   </header>
 
   <section class="section" id="f2-1" data-title="B.1 登录时到底发生了什么" data-read="7" data-check="5" data-next="下一节：进程与 systemd">
-    <span class="section-label">基础模块 · 小节 1</span>
+    <span class="section-label">模块 4 · 小节 1</span>
     <h3>登录时到底发生了什么</h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
 
     <div class="ask" data-ask>
@@ -512,16 +777,16 @@ flowchart LR
 </div>
 </section>
 
-<section class="module" id="f3" data-num="C" data-title="进程、信号与 systemd">
+<section class="module" id="f3" data-num="5" data-title="进程、信号与 systemd">
 <div class="wrap">
   <header class="module-head">
-    <div class="module-num">C</div>
+    <div class="module-num">05</div>
     <h2>进程、信号与 systemd</h2>
     <p class="lede">进程不是“一个运行中的程序”，而是 task_struct + 地址空间 + 文件表 + 凭据。信号是内核投递的异步事件；systemd 只是把进程生命周期写成单元。</p>
   </header>
 
   <section class="section" id="f3-1" data-title="C.1 进程与信号" data-read="7" data-check="5" data-next="下一节：内存与 mmap">
-    <span class="section-label">基础模块 · 小节 1</span>
+    <span class="section-label">模块 5 · 小节 1</span>
     <h3>进程与信号</h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
 
     <div class="ask" data-ask>
@@ -658,16 +923,16 @@ lrwx------ 1 user user 64 ... 0 -&gt; /dev/pts/0</pre></details>
 </div>
 </section>
 
-<section class="module" id="f4" data-num="D" data-title="内存与 mmap">
+<section class="module" id="f4" data-num="6" data-title="内存与 mmap">
 <div class="wrap">
   <header class="module-head">
-    <div class="module-num">D</div>
+    <div class="module-num">06</div>
     <h2>内存与 mmap</h2>
     <p class="lede">进程看到的地址不是物理内存，而是页表映射。mmap 把文件或匿名页接进地址空间；page fault 才真正分配/读入。理解这一层，`free`、RSS、OOM、page cache 才说得清。</p>
   </header>
 
   <section class="section" id="f4-1" data-title="D.1 虚拟地址、mmap 与 page cache" data-read="7" data-check="5" data-next="下一节：网络与容器">
-    <span class="section-label">基础模块 · 小节 1</span>
+    <span class="section-label">模块 6 · 小节 1</span>
     <h3>虚拟地址、<code>mmap</code> 与 page cache</h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
 
     <div class="ask" data-ask>
@@ -830,16 +1095,152 @@ char *p = mmap(NULL, 4096, PROT_READ | PROT_WRITE,
 </div>
 </section>
 
-<section class="module" id="m1" data-num="1" data-title="内核 C 与地址空间">
+<section class="module" id="storage" data-num="7" data-title="存储与 I/O">
 <div class="wrap">
   <header class="module-head">
-    <div class="module-num">01</div>
+    <div class="module-num">07</div>
+    <h2>存储与 I/O</h2>
+    <p class="lede">文件系统不是磁盘本身；<code>df</code> 与 <code>du</code> 也不是一回事。这一节把块设备、文件系统、fd 与 epoll 串起来。</p>
+  </header>
+
+  <section class="section" id="storage-1" data-title="7.1 从块设备到 epoll" data-read="7" data-check="5" data-next="下一节：内核 C 与网络">
+    <span class="section-label">模块 7 · 小节 1</span>
+    <h3>从块设备到 epoll</h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
+
+    <div class="ask" data-ask>
+      <p class="q"><span class="tag">先问</span><code>df</code> 显示磁盘满，<code>du</code> 却找不到大文件，可能是什么？</p>
+      <button type="button" class="textbtn">先想 10 秒，再看</button>
+      <div class="a" hidden><p>文件被删除但仍被进程打开；目录项没了，inode/数据块还占着。</p></div>
+    </div>
+
+    <div class="screen">
+      <p>块设备提供固定大小块；文件系统在块上组织 inode/目录/数据；VFS 把不同文件系统统一成 <code>file / inode / dentry</code> 接口。</p>
+      <figure class="diagram">
+        <div class="diagram-note">存储栈</div>
+        <div class="mermaid">
+flowchart TB
+  A["应用 read/write"] --> V["VFS"]
+  V --> F["ext4 / xfs / overlay"]
+  F --> B["block layer<br/>bio / scheduler"]
+  B --> D["NVMe / virtio-blk"]
+  D --> M["物理介质"]
+        </div>
+        <figcaption>page cache 在 VFS 与文件系统之间；write 通常先写缓存，回写是另一条路。</figcaption>
+        <details><summary>图源</summary><pre>flowchart TB
+  app --> vfs --> fs --> block --> device</pre></details>
+      </figure>
+      <div class="code">
+        <div class="code-head"><span>看块设备与文件系统</span></div>
+        <pre><code>lsblk -f
+df -hT
+findmnt /
+stat -f /</code></pre>
+      </div>
+    </div>
+
+    <div class="micro" data-micro data-good="b">
+      <p class="micro-q"><span class="tag">预测</span>删除一个被进程打开的文件，磁盘空间会立刻释放吗？</p>
+      <div class="micro-actions">
+        <button data-pick="a">会</button>
+        <button data-pick="b">不会，等最后一个 fd 关闭</button>
+        <button data-pick="c">重启才释放</button>
+      </div>
+      <div class="micro-result" hidden data-msg-a="目录项删了，inode 还被引用。" data-msg-b="对。用 lsof +L1 能找到这类文件。"></div>
+    </div>
+
+    <div class="screen">
+      <h4>fd 与 epoll</h4>
+      <p>fd 是进程 fd 表的下标，指向 <code>struct file</code>。阻塞 I/O 让线程睡；epoll 把“哪些 fd 就绪”交给内核批量通知，避免为每个连接开线程。</p>
+      <figure class="diagram">
+        <div class="diagram-note">fd 表与 epoll</div>
+        <div class="mermaid">
+flowchart LR
+  P["进程"] --> T["fd 表"]
+  T --> F1["file: socket"]
+  T --> F2["file: 普通文件"]
+  E["epoll 实例"] --> R["就绪列表"]
+  F1 -.->|"注册"| E
+        </div>
+        <figcaption>epoll 不是“更快的 select”，而是内核维护的就绪集合 + 回调。</figcaption>
+        <details><summary>图源</summary><pre>flowchart LR
+  process --> fdtable --> file
+  epoll --> ready</pre></details>
+      </figure>
+      <p><code>df</code> 看文件系统块使用；<code>du</code> 累加目录树里的文件大小。硬链接、稀疏文件、删除未关闭文件都会让两者不一致。</p>
+    </div>
+
+    <div class="gate">
+      <div class="gate-step">
+        <div class="gate-step-head"><span class="step-num">1</span><h4>检查理解</h4><span class="gate-time">≈2 分钟 · 不计分</span></div>
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">1.</span>df 与 du 不一致，常见原因是：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="storage-q1" value="a"><span><span class="opt-key">A</span> df 算错了<span class="opt-why">df 读文件系统统计。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="storage-q1" value="b"><span><span class="opt-key">B</span> 删除但仍被打开的文件 / 硬链接<span class="opt-why">对。空间未释放或重复计数。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="storage-q1" value="c"><span><span class="opt-key">C</span> 没有 root<span class="opt-why">与权限无关。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden><code>lsof +L1</code> 是排查“删了没释放”的常用命令。</p>
+        </fieldset>
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">2.</span>epoll 的核心优势是：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="storage-q2" value="a"><span><span class="opt-key">A</span> 每个连接一个线程<span class="opt-why">那是阻塞模型。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="storage-q2" value="b"><span><span class="opt-key">B</span> 内核维护就绪集合，批量通知<span class="opt-why">对。避免 O(n) 扫描。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="storage-q2" value="c"><span><span class="opt-key">C</span> 自动压缩数据<span class="opt-why">与压缩无关。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>epoll 适合大量空闲连接，不是所有场景都最快。</p>
+        </fieldset>
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">3.</span>write 返回成功后，数据通常：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="storage-q3" value="a"><span><span class="opt-key">A</span> 已在物理磁盘<span class="opt-why">可能在 page cache。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="storage-q3" value="b"><span><span class="opt-key">B</span> 已进入 page cache，回写另算<span class="opt-why">对。fsync 才要求落盘。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="storage-q3" value="c"><span><span class="opt-key">C</span> 一定丢了<span class="opt-why">没有。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>掉电一致性看 fsync/fdatasync 与文件系统日志。</p>
+        </fieldset>
+      </div>
+      <div class="gate-step">
+        <div class="gate-step-head"><span class="step-num">2</span><h4>用自己的话解释</h4><span class="gate-time">≈3 分钟 · 本地保存</span></div>
+        <div class="sa" data-sa="storage-1">
+          <label class="sa-label" for="sa-storage-1">用 2–3 句话解释：为什么“删除文件”后 df 仍显示空间被占？epoll 又如何避免为每个连接开线程？</label>
+          <textarea id="sa-storage-1" rows="4" placeholder="inode 引用、fd、就绪集合……"></textarea>
+          <div class="sa-meta"><span class="wordcount">0 字</span><span class="save-status" aria-live="polite"></span><span class="spacer"></span><button type="button" class="textbtn" data-clear>清空</button></div>
+          <div class="sa-actions"><button type="button" class="btn secondary small" data-reveal>查看参考答案</button><button type="button" class="textbtn" data-stuck>我卡住了</button><button type="button" class="textbtn" data-copy-mine>复制我的答案</button></div>
+          <div class="model" hidden><span class="model-kicker">参考答案</span><p>删除只移除目录项并减链接计数；只要还有进程持有 fd，inode 与数据块就不能释放，所以 df 仍算占用而 du 看不到。epoll 把关注的 fd 注册到内核，内核用回调维护就绪集合，应用一次 wait 拿到一批就绪事件，不必为每个连接阻塞一个线程。</p></div>
+          <div class="selfcheck" aria-label="自查"><label><input type="checkbox"> 我说明了 inode/fd 引用导致空间未释放。</label><label><input type="checkbox"> 我说明了 du 看不到已删目录项。</label><label><input type="checkbox"> 我说明了 epoll 的就绪集合/回调。</label></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tryit">
+      <div class="tryit-head"><span class="label">60 秒动手</span><span class="t">≈2 分钟</span></div>
+      <p>看块设备、文件系统与打开的文件。</p>
+      <pre class="term">$ lsblk -f
+$ df -hT /
+$ stat -f /
+$ lsof +L1 | head</pre>
+      <details><summary>看预期输出</summary><pre class="term">NAME   FSTYPE FSVER LABEL UUID FSAVAIL FSUSE% MOUNTPOINTS
+...
+/dev/vda1 ext4 ... 12G 40% /</pre></details>
+      <p class="tryit-note">lsof +L1 找 link count 为 0 但仍打开的文件。</p>
+    </div>
+
+    <div class="recap"><h4>本小节可以带走</h4><ul><li>VFS 统一 inode/file；文件系统在块设备上组织数据。</li><li>df 看块使用，du 看目录树；删除未关闭文件会不一致。</li><li>write 进 page cache；epoll 用就绪集合避免每连接一线程。</li></ul></div>
+  </section>
+</div>
+</section>
+
+<section class="module" id="m1" data-num="8" data-title="内核 C 与地址空间">
+<div class="wrap">
+  <header class="module-head">
+    <div class="module-num">08</div>
     <h2>内核 C 与地址空间</h2>
     <p class="lede">内核 C 不是“带指针的 C 作业”。它有一套自己的地址语义、容器习惯和错误约定。先把这些练成手感，后面的 socket、skb、驱动才读得动。</p>
   </header>
 
   <section class="section" id="s1-1" data-title="1.1 内核 C 的五个习惯" data-read="7" data-check="5" data-next="下一节：地址空间">
-    <span class="section-label">模块 1 · 小节 1</span>
+    <span class="section-label">模块 8 · 小节 1</span>
     <h3>内核 C 的五个习惯</h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
     <div class="ask" data-ask>
       <p class="q"><span class="tag">先问</span>为什么内核链表不单独分配节点？</p>
@@ -1047,7 +1448,7 @@ void *kc_err_ptr(long err)
   </div>
 
   <section class="section" id="s1-2" data-title="1.2 地址空间：__user、__iomem、DMA" data-read="7" data-check="5" data-next="下一节：四个对象">
-    <span class="section-label">模块 1 · 小节 2</span>
+    <span class="section-label">模块 8 · 小节 2</span>
     <h3>地址空间：<code>__user</code>、<code>__iomem</code>、DMA</h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
     <div class="ask" data-ask>
       <p class="q"><span class="tag">先问</span>用户指针为什么不能直接读？</p>
@@ -1276,16 +1677,16 @@ static int __init hello_init(void)
 </div>
 </section>
 
-<section class="module" id="m2" data-num="2" data-title="网络栈地图与地址">
+<section class="module" id="m2" data-num="9" data-title="网络栈地图与地址">
 <div class="wrap">
   <header class="module-head">
-    <div class="module-num">02</div>
+    <div class="module-num">09</div>
     <h2>网络栈地图与地址</h2>
     <p class="lede">内核网络栈只有四个核心对象：socket、sock、sk_buff、net_device。地址则决定“从哪个对象找到下一个对象”。先把地图和地址表示钉死。</p>
   </header>
 
   <section class="section" id="s2-1" data-title="2.1 四个对象" data-read="7" data-check="5" data-next="下一节：地址">
-    <span class="section-label">模块 2 · 小节 1</span>
+    <span class="section-label">模块 9 · 小节 1</span>
     <h3>四个对象</h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
     <div class="ask" data-ask>
       <p class="q"><span class="tag">先问</span>TCP 序列号在 socket 还是 sock？</p>
@@ -1440,7 +1841,7 @@ flowchart LR
   </section>
 
   <section class="section" id="s2-2" data-title="2.2 地址：sockaddr、IP、CIDR、MAC" data-read="7" data-check="5" data-next="下一节：socket()">
-    <span class="section-label">模块 2 · 小节 2</span>
+    <span class="section-label">模块 9 · 小节 2</span>
     <h3>地址：sockaddr、IP、CIDR、MAC</h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
     <div class="ask" data-ask>
       <p class="q"><span class="tag">先问</span>sin_port 用什么字节序？</p>
@@ -1658,16 +2059,16 @@ bool kc_cidr_contains(uint32_t net_be,
 </div>
 </section>
 
-<section class="module" id="m3" data-num="3" data-title="socket 与发送路径">
+<section class="module" id="m3" data-num="10" data-title="socket 与发送路径">
 <div class="wrap">
   <header class="module-head">
-    <div class="module-num">03</div>
+    <div class="module-num">10</div>
     <h2>socket 与发送路径</h2>
     <p class="lede">用户态一句 <code>sendto</code>，在内核里先找 fd，再找 socket，再按协议族分派到 TCP/UDP。这一段是“从系统调用进入协议”的门口。</p>
   </header>
 
   <section class="section" id="s3-1" data-title="3.1 从 socket() 到 proto_ops" data-read="7" data-check="5" data-next="下一节：sendto">
-    <span class="section-label">模块 3 · 小节 1</span>
+    <span class="section-label">模块 10 · 小节 1</span>
     <h3>从 <code>socket()</code> 到 <code>proto_ops</code></h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
     <div class="ask" data-ask>
       <p class="q"><span class="tag">先问</span>socket() 会建立连接吗？</p>
@@ -1834,7 +2235,7 @@ sequenceDiagram
   </section>
 
   <section class="section" id="s3-2" data-title="3.2 sendto：从 fd 到 tcp_sendmsg" data-read="7" data-check="5" data-next="下一节：IP 与路由">
-    <span class="section-label">模块 3 · 小节 2</span>
+    <span class="section-label">模块 10 · 小节 2</span>
     <h3><code>sendto</code>：从 fd 到 <code>tcp_sendmsg</code></h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
     <div class="ask" data-ask>
       <p class="q"><span class="tag">先问</span>sendto 先找 fd 还是先拷地址？</p>
@@ -2070,16 +2471,16 @@ for (;;) {
 </div>
 </section>
 
-<section class="module" id="m4" data-num="4" data-title="IP、路由与邻居">
+<section class="module" id="m4" data-num="11" data-title="IP、路由与邻居">
 <div class="wrap">
   <header class="module-head">
-    <div class="module-num">04</div>
+    <div class="module-num">11</div>
     <h2>IP、路由与邻居</h2>
     <p class="lede">到了网络层，地址不再只是“目标的 4 个字节”。要选出口、查下一跳、解析 MAC，最后才把包交给 qdisc。这里也是“地址最重要”的地方。</p>
   </header>
 
   <section class="section" id="s4-1" data-title="4.1 IPv4 头与地址" data-read="7" data-check="5" data-next="下一节：路由与邻居">
-    <span class="section-label">模块 4 · 小节 1</span>
+    <span class="section-label">模块 11 · 小节 1</span>
     <h3>IPv4 头与地址</h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
     <div class="ask" data-ask>
       <p class="q"><span class="tag">先问</span>IPv4 头第一步读哪几位？</p>
@@ -2273,7 +2674,7 @@ flowchart LR
   </div>
 
   <section class="section" id="s4-2" data-title="4.2 路由与邻居" data-read="7" data-check="5" data-next="下一节：sk_buff">
-    <span class="section-label">模块 4 · 小节 2</span>
+    <span class="section-label">模块 11 · 小节 2</span>
     <h3>路由与邻居</h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
     <div class="ask" data-ask>
       <p class="q"><span class="tag">先问</span>路由和 ARP 各回答什么？</p>
@@ -2474,16 +2875,16 @@ ip netns add kc-ns2
 </div>
 </section>
 
-<section class="module" id="m5" data-num="5" data-title="sk_buff 与 TCP">
+<section class="module" id="m5" data-num="12" data-title="sk_buff 与 TCP">
 <div class="wrap">
   <header class="module-head">
-    <div class="module-num">05</div>
+    <div class="module-num">12</div>
     <h2>sk_buff 与 TCP</h2>
     <p class="lede">sk_buff 是网络栈的“通用货币”。同一块内存，TCP 加头、IP 加头、驱动加 DMA 映射，靠的都是 head/data/tail/end 四个指针。</p>
   </header>
 
   <section class="section" id="s5-1" data-title="5.1 sk_buff 的四个指针" data-read="7" data-check="5" data-next="下一节：TCP 与 qdisc">
-    <span class="section-label">模块 5 · 小节 1</span>
+    <span class="section-label">模块 12 · 小节 1</span>
     <h3>sk_buff 的四个指针</h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
     <div class="ask" data-ask>
       <p class="q"><span class="tag">先问</span>skb_push 动哪个指针？</p>
@@ -2682,7 +3083,7 @@ int kc_parse_eth_ip_tcp(const struct kc_skb *skb,
   </div>
 
   <section class="section" id="s5-2" data-title="5.2 TCP 发送与 qdisc" data-read="7" data-check="5" data-next="下一节：驱动与 NAPI">
-    <span class="section-label">模块 5 · 小节 2</span>
+    <span class="section-label">模块 12 · 小节 2</span>
     <h3>TCP 发送与 qdisc</h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
     <div class="ask" data-ask>
       <p class="q"><span class="tag">先问</span>sendto 成功等于对方收到吗？</p>
@@ -2837,16 +3238,16 @@ stateDiagram-v2
 </div>
 </section>
 
-<section class="module" id="m6" data-num="6" data-title="驱动、NAPI 与 XDP">
+<section class="module" id="m6" data-num="13" data-title="驱动、NAPI 与 XDP">
 <div class="wrap">
   <header class="module-head">
-    <div class="module-num">06</div>
+    <div class="module-num">13</div>
     <h2>驱动、NAPI 与 XDP</h2>
     <p class="lede">数据路径的最后一段：包如何从网卡进入内核（NAPI），如何交给协议栈，以及如何在协议栈之前用 XDP 改写/丢弃。</p>
   </header>
 
   <section class="section" id="s6-1" data-title="6.1 net_device 与 NAPI" data-read="7" data-check="5" data-next="下一节：XDP">
-    <span class="section-label">模块 6 · 小节 1</span>
+    <span class="section-label">模块 13 · 小节 1</span>
     <h3><code>net_device</code> 与 NAPI</h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
     <div class="ask" data-ask>
       <p class="q"><span class="tag">先问</span>NAPI 为什么把中断改轮询？</p>
@@ -3001,7 +3402,7 @@ flowchart TB
   </section>
 
   <section class="section" id="s6-2" data-title="6.2 XDP 与 eBPF" data-read="7" data-check="5" data-next="下一节：Capstone">
-    <span class="section-label">模块 6 · 小节 2</span>
+    <span class="section-label">模块 13 · 小节 2</span>
     <h3>XDP 与 eBPF</h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
     <div class="ask" data-ask>
       <p class="q"><span class="tag">先问</span>XDP 在 skb 之前还是之后？</p>
@@ -3236,6 +3637,146 @@ int xdp_drop_icmp(struct xdp_md *ctx)
       <p class="lab-foot">这是“上手内核网络开发”的毕业作品：能编译、能加载、能在 <code>ip link</code> 看到、能安全卸载。做完它，再去看真实驱动会顺很多。</p>
     </div>
   </div>
+</div>
+</section>
+
+<section class="module" id="containers" data-num="14" data-title="容器与隔离">
+<div class="wrap">
+  <header class="module-head">
+    <div class="module-num">14</div>
+    <h2>容器与隔离</h2>
+    <p class="lede">容器不是轻量 VM。它是一组进程 + namespace（看见什么）+ cgroup（能用多少）+ seccomp/capabilities（能做什么）+ 一个根文件系统。</p>
+  </header>
+
+  <section class="section" id="containers-1" data-title="14.1 容器不是虚拟机" data-read="7" data-check="5" data-next="回到 Capstone">
+    <span class="section-label">模块 14 · 小节 1</span>
+    <h3>容器不是虚拟机</h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
+
+    <div class="ask" data-ask>
+      <p class="q"><span class="tag">先问</span>容器里有独立内核吗？</p>
+      <button type="button" class="textbtn">先想 10 秒，再看</button>
+      <div class="a" hidden><p>没有。容器共享宿主内核；隔离来自 namespace/cgroup/seccomp，不是虚拟化。</p></div>
+    </div>
+
+    <div class="screen">
+      <p>namespace 改变“看见什么”：PID、网络、挂载、UTS、IPC、user、cgroup。cgroup 限制“用多少” CPU/内存/IO。seccomp 限制“能调哪些 syscall”。</p>
+      <figure class="diagram">
+        <div class="diagram-note">容器的四层</div>
+        <div class="mermaid">
+flowchart TB
+  P["进程"] --> N["namespace<br/>PID/NET/MNT/USER"]
+  P --> C["cgroup<br/>CPU/内存/IO"]
+  P --> S["seccomp / caps<br/>能做什么"]
+  P --> R["rootfs<br/>overlay / pivot_root"]
+        </div>
+        <figcaption>四层各管一件事；缺一层都不是“容器”，只是普通进程。</figcaption>
+        <details><summary>图源</summary><pre>flowchart TB
+  process --> namespaces
+  process --> cgroups
+  process --> seccomp
+  process --> rootfs</pre></details>
+      </figure>
+      <div class="code">
+        <div class="code-head"><span>最小心智模型</span></div>
+        <pre><code>unshare --pid --net --mount --fork ...
+# 新 namespace
+echo 100000 &gt; /sys/fs/cgroup/.../pids.max
+# cgroup 限制
+pivot_root newroot newroot/oldroot
+# 换根
+</code></pre>
+      </div>
+    </div>
+
+    <div class="micro" data-micro data-good="b">
+      <p class="micro-q"><span class="tag">预测</span>容器里 <code>uname -r</code> 看到的内核版本是谁的？</p>
+      <div class="micro-actions">
+        <button data-pick="a">容器自己的</button>
+        <button data-pick="b">宿主内核的</button>
+        <button data-pick="c">随机</button>
+      </div>
+      <div class="micro-result" hidden data-msg-a="容器没有自己的内核。" data-msg-b="对。共享宿主内核，所以内核漏洞会影响所有容器。"></div>
+    </div>
+
+    <div class="screen">
+      <h4>隔离的边界</h4>
+      <p>namespace 不是安全边界本身：共享内核意味着内核漏洞可逃逸；还需要 seccomp、capabilities、SELinux/AppArmor、user namespace 映射。</p>
+      <figure class="diagram">
+        <div class="diagram-note">从一个容器进程看出去</div>
+        <div class="mermaid">
+flowchart LR
+  A["container 进程"] -->|"syscall"| K["宿主内核"]
+  K -->|"namespace 检查"| V["看到的 PID/NET"]
+  K -->|"cgroup 检查"| L["配额"]
+  K -->|"seccomp"| S["允许的 syscall"]
+        </div>
+        <figcaption>所有隔离都在同一个内核里做检查；这就是容器轻量、也共享风险的原因。</figcaption>
+        <details><summary>图源</summary><pre>flowchart LR
+  process --> kernel --> ns/cgroup/seccomp</pre></details>
+      </figure>
+      <p>排查容器：<code>lsns</code> 看 namespace，<code>cat /proc/&lt;pid&gt;/cgroup</code> 看 cgroup，<code>capsh --print</code> 看 capabilities，<code>dmesg</code>/journal 看内核拒绝。</p>
+    </div>
+
+    <div class="gate">
+      <div class="gate-step">
+        <div class="gate-step-head"><span class="step-num">1</span><h4>检查理解</h4><span class="gate-time">≈2 分钟 · 不计分</span></div>
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">1.</span>容器与虚拟机的关键区别：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="ct-q1" value="a"><span><span class="opt-key">A</span> 容器有独立内核<span class="opt-why">共享宿主内核。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="ct-q1" value="b"><span><span class="opt-key">B</span> 容器是共享内核的隔离进程<span class="opt-why">对。namespace/cgroup/seccomp 做隔离与限制。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="ct-q1" value="c"><span><span class="opt-key">C</span> 容器不需要 rootfs<span class="opt-why">通常需要根文件系统。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>轻量来自共享内核，风险也来自共享内核。</p>
+        </fieldset>
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">2.</span>cgroup 主要限制：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="ct-q2" value="a"><span><span class="opt-key">A</span> 能看见哪些 PID<span class="opt-why">那是 PID namespace。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="ct-q2" value="b"><span><span class="opt-key">B</span> CPU/内存/IO 配额<span class="opt-why">对。cgroup 管资源，不管可见性。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="ct-q2" value="c"><span><span class="opt-key">C</span> 允许哪些 syscall<span class="opt-why">那是 seccomp。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>namespace 管“看见”，cgroup 管“用多少”。</p>
+        </fieldset>
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">3.</span>容器逃逸风险主要来自：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="ct-q3" value="a"><span><span class="opt-key">A</span> namespace 太多<span class="opt-why">不是。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="ct-q3" value="b"><span><span class="opt-key">B</span> 共享内核 + 过度 capabilities/挂载<span class="opt-why">对。内核漏洞、特权容器、挂载 docker.sock 都危险。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="ct-q3" value="c"><span><span class="opt-key">C</span> rootfs 太大<span class="opt-why">与隔离无关。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>最小 capabilities、只读挂载、seccomp 是基本盘。</p>
+        </fieldset>
+      </div>
+      <div class="gate-step">
+        <div class="gate-step-head"><span class="step-num">2</span><h4>用自己的话解释</h4><span class="gate-time">≈3 分钟 · 本地保存</span></div>
+        <div class="sa" data-sa="containers-1">
+          <label class="sa-label" for="sa-containers-1">用 2–3 句话解释：namespace、cgroup、seccomp 各解决什么问题？为什么“共享内核”既是容器轻量的原因，也是风险来源？</label>
+          <textarea id="sa-containers-1" rows="4" placeholder="看见什么、用多少、能做什么……"></textarea>
+          <div class="sa-meta"><span class="wordcount">0 字</span><span class="save-status" aria-live="polite"></span><span class="spacer"></span><button type="button" class="textbtn" data-clear>清空</button></div>
+          <div class="sa-actions"><button type="button" class="btn secondary small" data-reveal>查看参考答案</button><button type="button" class="textbtn" data-stuck>我卡住了</button><button type="button" class="textbtn" data-copy-mine>复制我的答案</button></div>
+          <div class="model" hidden><span class="model-kicker">参考答案</span><p>namespace 改变进程能看见的 PID/网络/挂载等视图；cgroup 限制 CPU、内存、IO 等资源；seccomp 与 capabilities 限制可执行的 syscall 和特权。三者都在宿主内核里实现，不需要模拟硬件，所以容器启动快、开销小；但内核漏洞或过度特权会同时影响所有容器，隔离强度低于虚拟机。</p></div>
+          <div class="selfcheck" aria-label="自查"><label><input type="checkbox"> 我区分了 namespace/cgroup/seccomp。</label><label><input type="checkbox"> 我说明了共享内核带来的轻量。</label><label><input type="checkbox"> 我说明了共享内核带来的逃逸风险。</label></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tryit">
+      <div class="tryit-head"><span class="label">60 秒动手</span><span class="t">≈2 分钟</span></div>
+      <p>在 VM 里看一个进程的 namespace 与 cgroup。</p>
+      <pre class="term">$ sleep 30 &amp;
+$ pid=$!
+$ lsns -p $pid
+$ cat /proc/$pid/cgroup
+$ grep -E 'Cap(Eff|Prm)' /proc/$pid/status</pre>
+      <details><summary>看预期输出</summary><pre class="term">NS TYPE   NPROCS PID USER COMMAND
+...
+0::/user.slice/user-1000.slice/...</pre></details>
+      <p class="tryit-note">容器运行时做的就是：为子进程创建这些 namespace/cgroup，再 pivot_root。</p>
+    </div>
+
+    <div class="recap"><h4>本小节可以带走</h4><ul><li>容器 = 进程 + namespace + cgroup + seccomp/caps + rootfs。</li><li>namespace 管可见性，cgroup 管资源，seccomp 管 syscall。</li><li>共享内核：轻量，也共享风险。</li></ul></div>
+  </section>
 </div>
 </section>
 
