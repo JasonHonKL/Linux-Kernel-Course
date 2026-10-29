@@ -13,7 +13,7 @@
 <body>
 <header class="topnav">
   <div class="brand"><span class="brand-mark"></span>Linux 全景</div>
-  <div class="navmeta">linux 7.3 · 22 章 · 14+1 实验 · 项目制</div>
+  <div class="navmeta">linux 7.3 · 22 章 · 15+1 实验 · 项目制</div>
   <nav class="navlinks" aria-label="课程导航">
     <a href="#boot">启动</a>
     <a href="#f1">文件</a>
@@ -43,7 +43,7 @@
   <div class="meta-row">
     <span><strong>22</strong> 章</span>
     <span><strong>28</strong> 节</span>
-    <span><strong>14+1</strong> 个实验</span>
+    <span><strong>15+1</strong> 个实验</span>
     <span><strong>≈24</strong> 小时</span>
     <span>轨道：<strong>Deep Diver</strong></span>
   </div>
@@ -4040,6 +4040,26 @@ sequenceDiagram
 <div class="model" hidden><span class="model-kicker">参考答案</span><p>probe 先由 PCI ID 匹配进入，启用设备并设置 DMA mask，映射 BAR，申请 MSI-X，初始化 DMA 队列，最后注册对外接口并使能。remove 要按相反顺序：先停接口与新请求，停队列/中断，释放 DMA 与 IRQ，unmap BAR，最后禁用设备，避免释放后仍有中断或 DMA 访问。</p></div>
 <div class="selfcheck" aria-label="自查"><label><input type="checkbox"> 我写出 probe 主要步骤。</label><label><input type="checkbox"> 我说明先停新请求。</label><label><input type="checkbox"> 我说明反向清理避免 use-after-free。</label></div></div></div></div>
 
+  <div class="lab" data-lab="lab-pci" id="lab-pci">
+    <div class="lab-head"><div class="lab-kicker">实验 · 35 分钟 · 需要 Lima VM</div><h3>QEMU edu PCI 驱动：ID、BAR、MMIO</h3><p class="lab-sub">真实内核模块：匹配 1234:11e8，映射 BAR0，读 ID，写/读 scratch；附 QEMU edu 运行脚本。</p></div>
+    <div class="lab-body">
+      <p class="lab-broken"><span class="label">当前状态</span><code>kc_probe</code> 直接返回 0；没有 enable、没有 BAR 映射。</p>
+      <div class="lab-grid"><div>
+        <h4>任务</h4><ol class="task-list"><li>PCI ID 表匹配 edu。</li><li>enable + request_regions + pci_iomap。</li><li><code>readl(base+0)</code> 读 0x010000ed。</li><li><code>writel/readl(base+4)</code> 验证 scratch。</li><li>remove 反向清理。</li></ol>
+        <div class="pathline"><code>linux-course/work/lab-pci/kcedu.c</code><button class="copy" data-copy="linux-course/work/lab-pci/kcedu.c">复制路径</button></div>
+      </div><div>
+        <h4>只读预览</h4><div class="lab-preview"><pre>static int kc_probe(struct pci_dev *pdev, ...)
+{
+    /* TODO: enable + request_regions */
+    /* TODO: pci_iomap + readl/writel */
+    return 0;
+}</pre></div>
+        <div class="lab-actions"><button type="button" class="btn" data-check>检查我的实验</button><span class="lab-status">编译 + PCI 契约；QEMU 运行见脚本</span></div><div class="lab-results" hidden></div>
+      </div></div>
+      <details class="hints"><summary>三级提示</summary><div class="hint"><b>提示 1</b><code>PCI_DEVICE(0x1234,0x11e8)</code>；先看 <code>lspci -nn</code>。</div><div class="hint"><b>提示 2</b><code>pci_enable_device</code> → <code>pci_request_regions</code> → <code>pci_iomap(pdev,0,0)</code>。</div><div class="hint"><b>提示 3</b>remove 顺序：proc → iounmap → release → disable。</div></details>
+      <p class="lab-foot">检查：<code>node linux-course/check.mjs lab-pci</code>；运行时：<code>sudo sh run-qemu.sh</code>（需 raw Image）。</p>
+    </div>
+  </div>
 <div class="lab project"><div class="lab-head"><div class="lab-kicker">P4 · 20–30 小时</div><h3>QEMU 假 PCIe 设备 + 驱动</h3><p class="lab-sub">QEMU 侧实现 BAR/寄存器/MSI-X/DMA；Linux 侧写 probe/remove、字符设备、ioctl、中断与 DMA。</p></div><div class="lab-body"><p>交付：QEMU 设备、驱动、lspci/dmesg、功能测试、remove 无泄漏、writeup。</p></div></div>
 </section></div></section>
 
