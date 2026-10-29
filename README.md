@@ -13,7 +13,7 @@
 1 开机与启动 · 2 Shell 与文本 · 3 文件/inode · 4 用户/passwd · 5 进程/systemd · 6 存储/IO · 7 内存/mmap
 
 **Part II · 内核基础（8–11）**
-8 内核 C 与地址空间 · 9 UB/架构 · 10 锁/RCU · 11 内存/DMA/IOMMU
+8 内核 C 与地址空间 · 9 UB/内存序 · 10 锁/RCU · 11 内存/DMA/IOMMU
 
 **Part III · 网络（12–16）**
 12 socket/对象 · 13 发送路径 · 14 IP/路由 · 15 sk_buff/TCP · 16 驱动/NAPI/XDP
