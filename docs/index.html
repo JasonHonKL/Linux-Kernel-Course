@@ -1,0 +1,2487 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Linux 内核网络 · 从 socket 到网卡</title>
+<meta name="description" content="一门面向内核网络开发的中文课程：内核 C、地址、socket、sk_buff、路由、NAPI、XDP，配 9 个真实实验。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%231f6f8b'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="lab.css">
+</head>
+<body>
+<header class="topnav">
+  <div class="brand"><span class="brand-mark"></span>Linux 内核网络</div>
+  <div class="navmeta">linux 7.3 · 6 模块 · 8+1 实验 · ≈9 小时</div>
+  <nav class="navlinks" aria-label="课程导航">
+    <a href="#m1">内核 C</a>
+    <a href="#m2">地址</a>
+    <a href="#m3">socket</a>
+    <a href="#m4">路由</a>
+    <a href="#m6">驱动</a>
+    <a href="#capstone">Capstone</a>
+  </nav>
+</header>
+<div class="progress-track" aria-hidden="true"><div class="progress-bar" id="progressBar"></div></div>
+
+<div class="shell">
+  <aside class="rail" aria-label="小节导航">
+    <p class="rail-kicker">课程地图</p>
+    <ul class="rail-list" id="railList"></ul>
+    <div class="rail-foot">
+      <div>当前之后</div>
+      <div class="rail-next" id="railNext">向下滚动开始</div>
+    </div>
+  </aside>
+  <main id="main">
+<div class="wrap">
+<section class="hero">
+  <p class="eyebrow">自上而下 · 真实内核源码 · 中文</p>
+  <h1>一次 sendto，<br>怎么走到网卡？</h1>
+  <p class="lede">不从“什么是 socket”讲起。我们从一个已经发出的包开始，沿着 <code>socket → sock → sk_buff → IP → qdisc → net_device</code> 一路向下，同时把内核风格的 C 练成手感。</p>
+  <div class="meta-row">
+    <span><strong>6</strong> 个模块</span>
+    <span><strong>12</strong> 个小节</span>
+    <span><strong>8+1</strong> 个实验</span>
+    <span><strong>≈9</strong> 小时</span>
+    <span>轨道：<strong>Deep Diver</strong></span>
+  </div>
+
+  <div class="hero-grid">
+    <div class="video-block">
+      <video controls preload="metadata" poster="assets/linux-main-poster.jpg" aria-label="课程主讲解视频：一次 sendto 在内核网络栈中的路径">
+        <source src="assets/linux-main.mp4" type="video/mp4">
+        你的浏览器不支持视频标签。可以打开 <code>linux-course/assets/linux-main.mp4</code>。
+      </video>
+      <figcaption><span>主片 · 68 秒 · 中文旁白</span><span>每个小节另有 约 15–25 秒“跟着做”视频</span></figcaption>
+    </div>
+    <div class="start-card">
+      <h2>开始之前</h2>
+      <p>C 是硬门槛；内核实验需要一个 Linux VM。</p>
+      <ol>
+        <li>确认 <code>cc --version</code> 可用（macOS clang 即可）</li>
+        <li>内核实验：<code>node linux-course/vm.mjs setup</code>（Lima + Ubuntu）</li>
+        <li>启动页面：<code>node linux-course/serve.mjs</code></li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+<section class="wrap" style="padding-top:34px">
+  <figure class="diagram">
+    <div class="diagram-note">课程地图</div>
+    <div class="mermaid">
+flowchart LR
+  A["内核 C<br/>与地址空间"] --> B["网络栈地图<br/>与地址"]
+  B --> C["socket 层<br/>proto_ops"]
+  C --> D["IP / 路由<br/>ARP / ND"]
+  D --> E["sk_buff<br/>与 TCP"]
+  E --> F["驱动 / NAPI<br/>XDP"]
+  F --> G["Capstone<br/>虚拟 netdev"]
+  B -.-> L2["Lab 2/3<br/>sockaddr / skb"]
+  D -.-> L5["Lab 5/6<br/>LPM / netns"]
+  F -.-> L8["Lab 8<br/>XDP"]
+    </div>
+    <figcaption>先练内核 C 与地址，再沿一条发送路径向下；每个盒子都有可运行的实验。</figcaption>
+    <details><summary>图源</summary><pre>flowchart LR
+  A[内核 C] --> B[地图/地址] --> C[socket] --> D[IP/路由]
+  D --> E[skb/TCP] --> F[驱动/NAPI/XDP] --> G[Capstone]
+  B -.-> L2[sockaddr/skb]
+  D -.-> L5[LPM/netns]
+  F -.-> L8[XDP]</pre></details>
+  </figure>
+
+  <div class="callout">
+    <span class="label">一句话模型</span>
+    <p>Linux 网络栈 = <strong>socket 对象</strong>（谁在通信）+ <strong>sock 协议状态</strong>（TCP/UDP 怎么算）+ <strong>sk_buff</strong>（这一包的字节与元数据）+ <strong>net_device / NAPI</strong>（从哪进出）。<strong>地址</strong>决定每一步往哪走：fd 找 socket，路由找出口，邻居找 MAC。</p>
+  </div>
+
+  <h3 style="font-family:var(--display);font-size:22px;margin:30px 0 8px">这门课对 C 的要求</h3>
+  <p>你会读大量内核 C：指针与地址空间、结构体嵌套、<code>container_of</code>、侵入式链表、位域、<code>ERR_PTR</code>、<code>__user</code> 标注、RCU 与锁。实验不是“看代码填空”，而是自己实现这些小机制，再进 VM 写模块。</p>
+  <p>如果 C 只写过课程作业，前两节的 Lab 0 会补齐内核习惯；如果已经写过驱动，可以直接从模块实验开始。</p>
+
+  <h3 style="font-family:var(--display);font-size:22px;margin:30px 0 8px">怎么用这门课</h3>
+  <p>每节先看 约 15–25 秒视频（目标 → 真实命令/输出 → 实验步骤 → 现在去做），再读图和源码，然后做 3 道选择题与 1 道简答。带实验的小节最后进 Lab；实验时间单独计算。</p>
+  <p>源码在 <code>linux-src/</code>（Linux 7.3.0）。行号会变，以你本地文件为准；视频和页面里的代码片段来自这棵树。</p>
+</section>
+</div>
+
+<section class="module" id="m1" data-num="1" data-title="内核 C 与地址空间">
+<div class="wrap">
+  <header class="module-head">
+    <div class="module-num">01</div>
+    <h2>内核 C 与地址空间</h2>
+    <p class="lede">内核 C 不是“带指针的 C 作业”。它有一套自己的地址语义、容器习惯和错误约定。先把这些练成手感，后面的 socket、skb、驱动才读得动。</p>
+  </header>
+
+  <section class="section" id="s1-1" data-title="1.1 内核 C 的五个习惯" data-read="7" data-check="5" data-next="下一节：地址空间">
+    <span class="section-label">模块 1 · 小节 1</span>
+    <h3>内核 C 的五个习惯</h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
+    <figure class="video-block section-video">
+      <video controls preload="metadata" poster="assets/sec-s1-1-poster.jpg" aria-label="本节视频：s1-1">
+        <source src="assets/sec-s1-1.mp4" type="video/mp4">
+        你的浏览器不支持视频标签。
+      </video>
+      <figcaption><span>本节视频 · 看完就能动手</span><span>命令与源码来自 linux-src/</span></figcaption>
+    </figure>
+
+    <div class="screen">
+      <p>先看一个最常见的动作：你手里只有 <code>struct kc_item</code> 里的 <code>node</code> 指针，怎么拿到外层结构？内核不额外存 back-pointer，而是用偏移量反推。</p>
+      <figure class="diagram">
+        <div class="diagram-note">container_of 的地址算术</div>
+        <div class="mermaid">
+flowchart LR
+  S["struct kc_item<br/>id + node"] --> N["&amp;item.node"]
+  N -->|"减去 offsetof(type, node)"| S2["item 的起始地址"]
+  S2 -->|"转成 type *"| P["struct kc_item *"]
+        </div>
+        <figcaption>节点地址减去成员偏移，就是容器地址；这是侵入式链表能零额外分配的原因。</figcaption>
+        <details><summary>图源</summary><pre>flowchart LR
+  S[struct item] --> N[&item.node]
+  N -->|minus offsetof| S2[item start]
+  S2 --> P[type *]</pre></details>
+      </figure>
+      <div class="code">
+        <div class="code-head"><span>include/linux/container_of.h:19</span></div>
+        <pre><code>#define container_of(ptr, type, member) ({				\
+	static_assert(__same_type(*(ptr), typeof_member(type, member)) || \
+		      __same_type(*(ptr), void),			\
+		      "pointer type mismatch in container_of()");	\
+	(type *)((void *)(ptr) - offsetof(type, member)); })</code></pre>
+      </div>
+      <p>第二个习惯是<strong>侵入式链表</strong>：链表节点嵌在业务结构里，不单独分配。遍历时用 <code>container_of</code> 从节点反推对象。</p>
+    </div>
+
+    <div class="micro" data-micro data-good="b">
+      <p class="micro-q"><span class="tag">预测</span><code>node</code> 在结构体里的偏移是 8，<code>&amp;item.node</code> 是 <code>0x1008</code>。容器地址是？</p>
+      <div class="micro-actions">
+        <button data-pick="a">0x1010</button>
+        <button data-pick="b">0x1000</button>
+        <button data-pick="c">0x1008</button>
+      </div>
+      <div class="micro-result" hidden data-msg-a="偏移要减，不是加。" data-msg-b="对。container_of 做的是 ptr - offsetof，得到结构体起点。"></div>
+    </div>
+
+    <div class="screen">
+      <h4>另外三个习惯</h4>
+      <ul>
+        <li><strong><code>ERR_PTR</code></strong>：指针返回值用负错误码编码，调用方用 <code>IS_ERR</code> / <code>PTR_ERR</code> 判断，避免额外的 out 参数。</li>
+        <li><strong>定宽与端序</strong>：<code>u32</code>、<code>__be32</code>、<code>__le32</code> 写明语义；网络协议字段几乎都是大端。</li>
+        <li><strong>可读的宏</strong>：<code>likely()</code>、<code>ARRAY_SIZE()</code>、<code>container_of()</code> 都是内核方言，读源码先认这些。</li>
+      </ul>
+      <div class="code">
+        <div class="code-head"><span>include/linux/err.h:39</span></div>
+        <pre><code>static __always_inline void * __must_check ERR_PTR(long error)
+{
+	return (void *) error;
+}</code></pre>
+      </div>
+      <div class="code">
+        <div class="code-head"><span>include/linux/list.h:204</span></div>
+        <pre><code>static inline void list_add_tail(struct list_head *new, struct list_head *head)
+{
+	__list_add(new, head-&gt;prev, head);
+}</code></pre>
+      </div>
+    </div>
+
+    <div class="gate">
+      <div class="gate-step">
+        <div class="gate-step-head"><span class="step-num">1</span><h4>检查理解</h4><span class="gate-time">≈2 分钟 · 不计分</span></div>
+
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">1.</span><code>container_of</code> 的核心运算是：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="s1-1-q1" value="a"><span><span class="opt-key">A</span> 成员地址加上偏移<span class="opt-why">那会走到结构体后面。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="s1-1-q1" value="b"><span><span class="opt-key">B</span> 成员地址减去成员偏移<span class="opt-why">对。成员地址 - offsetof(type, member) 就是容器起点。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="s1-1-q1" value="c"><span><span class="opt-key">C</span> 查哈希表<span class="opt-why">没有运行时查表，纯编译期偏移。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>正因为只做地址减法，侵入式链表才能零额外分配。</p>
+        </fieldset>
+
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">2.</span><code>__user</code> 标注的指针，内核代码应该：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="s1-1-q2" value="a"><span><span class="opt-key">A</span> 直接解引用，和普通指针一样<span class="opt-why">用户地址可能无效、可能换页，直接解引用会 oops。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="s1-1-q2" value="b"><span><span class="opt-key">B</span> 用 <code>copy_from_user</code> 等接口显式拷贝<span class="opt-why">对。必须走 uaccess，做访问检查与 fault 处理。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="s1-1-q2" value="c"><span><span class="opt-key">C</span> 先 <code>virt_to_phys</code> 再解引用<span class="opt-why">用户地址不是直接映射的物理地址。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden><code>__user</code> 是 sparse 的地址空间标记，提醒你不能混用。</p>
+        </fieldset>
+
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">3.</span>下面哪种返回值最符合内核风格？</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="s1-1-q3" value="a"><span><span class="opt-key">A</span> 返回 NULL 表示所有错误<span class="opt-why">NULL 无法区分 ENOMEM、EINVAL 等。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="s1-1-q3" value="b"><span><span class="opt-key">B</span> 返回 <code>ERR_PTR(-ENOMEM)</code><span class="opt-why">对。负错误码编码进指针，调用方用 IS_ERR/PTR_ERR 还原。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="s1-1-q3" value="c"><span><span class="opt-key">C</span> 抛异常<span class="opt-why">内核 C 没有异常。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>内核里“指针或错误码”是一个常见返回约定。</p>
+        </fieldset>
+      </div>
+
+      <div class="gate-step">
+        <div class="gate-step-head"><span class="step-num">2</span><h4>用自己的话解释</h4><span class="gate-time">≈3 分钟 · 本地保存</span></div>
+        <div class="sa" data-sa="s1-1">
+          <label class="sa-label" for="sa-s1-1">用 3–4 句话解释：为什么内核链表把节点嵌进业务结构，而不是像用户态那样单独分配节点？<code>container_of</code> 在其中承担什么角色？</label>
+          <textarea id="sa-s1-1" rows="4" placeholder="从分配次数、缓存局部性、反推对象三个角度想……"></textarea>
+          <div class="sa-meta"><span class="wordcount">0 字</span><span class="save-status" aria-live="polite"></span><span class="spacer"></span><button type="button" class="textbtn" data-clear>清空</button></div>
+          <div class="sa-actions">
+            <button type="button" class="btn secondary small" data-reveal>查看参考答案</button>
+            <button type="button" class="textbtn" data-stuck>我卡住了</button>
+            <button type="button" class="textbtn" data-copy-mine>复制我的答案</button>
+          </div>
+          <div class="model" hidden>
+            <span class="model-kicker">参考答案</span>
+            <p>侵入式链表把 <code>list_head</code> 放进业务结构，插入和删除不需要为节点单独分配内存，失败路径更少，节点与数据也在同一缓存行附近。遍历时拿到的是 <code>list_head *</code>，不是业务对象，所以需要 <code>container_of</code> 用“成员地址减偏移”反推出外层结构。代价是同一个对象只能同时属于一种链表（除非放多个节点），并且必须知道成员名。</p>
+          </div>
+          <div class="selfcheck" aria-label="自查">
+            <label><input type="checkbox"> 我提到了减少分配/失败路径。</label>
+            <label><input type="checkbox"> 我提到了缓存局部性或对象布局。</label>
+            <label><input type="checkbox"> 我说明了 container_of 的“减偏移”机制。</label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="recap">
+      <h4>本小节可以带走</h4>
+      <ul>
+        <li><code>container_of</code> = 成员地址 - 偏移；侵入式链表的基础。</li>
+        <li><code>ERR_PTR</code> / <code>IS_ERR</code> 把错误码编码进指针。</li>
+        <li>内核类型写明宽度与端序，网络字段通常是大端。</li>
+      </ul>
+    </div>
+  </section>
+
+  <div class="lab" data-lab="lab-kernel-c" id="lab-kernel-c">
+    <div class="lab-head">
+      <div class="lab-kicker">实验 0 · 20 分钟 · 难度：中</div>
+      <h3>实现内核风格的容器、链表与错误指针</h3>
+      <p class="lab-sub">不写内核模块，先在 macOS 上用 C 把内核最常用的三个 idiom 实现出来，并用单测验证。</p>
+    </div>
+    <div class="lab-body">
+      <p class="lab-broken"><span class="label">当前状态</span><code>kernel_c.c</code> 里的函数全是空实现；<code>kc_container_of</code> 返回 NULL。测试会失败或崩溃。</p>
+
+      <div class="lab-grid">
+        <div>
+          <h4>任务</h4>
+          <ol class="task-list">
+            <li>实现 <code>kc_container_of</code> 与 <code>kc_list_entry</code> 宏。</li>
+            <li>实现 <code>kc_list_for_each_entry</code> 遍历宏。</li>
+            <li>实现 init / add_tail / del / empty。</li>
+            <li>实现 <code>kc_err_ptr</code> / <code>kc_is_err</code> / <code>kc_ptr_err</code>。</li>
+          </ol>
+          <h4>交付物</h4>
+          <div class="pathline"><code>linux-course/work/lab-kernel-c/kernel_c.c</code><button class="copy" data-copy="linux-course/work/lab-kernel-c/kernel_c.c">复制路径</button></div>
+          <div class="pathline"><code>linux-course/work/lab-kernel-c/kernel_c.h</code><button class="copy" data-copy="linux-course/work/lab-kernel-c/kernel_c.h">复制路径</button></div>
+          <h4>约束</h4>
+          <ul>
+            <li>只用标准 C 与 <code>offsetof</code>；不要引入内核头文件。</li>
+            <li><code>cc -std=gnu11 -Wall -Wextra -Werror</code> 必须通过。</li>
+            <li>不能改测试；检查器会用自己的测试覆盖。</li>
+          </ul>
+        </div>
+        <div>
+          <h4>只读预览</h4>
+          <div class="lab-preview"><pre>#define kc_container_of(ptr, type, member) \
+	((type *)0) /* TODO */
+
+void kc_list_add_tail(struct kc_list *new,
+		      struct kc_list *head)
+{
+	/* TODO: 插到 head->prev 与 head 之间 */
+}
+
+void *kc_err_ptr(long err)
+{
+	/* TODO: 负错误码编码成指针 */
+	return NULL;
+}</pre></div>
+          <div class="lab-actions">
+            <button type="button" class="btn" data-check>检查我的实验</button>
+            <span class="lab-status">clang 编译 + 单测，不需要 root</span>
+          </div>
+          <div class="lab-results" hidden></div>
+        </div>
+      </div>
+
+      <details class="hints">
+        <summary>三级提示</summary>
+        <div class="hint"><b>提示 1 · 容器</b><code>((type *)((char *)(ptr) - offsetof(type, member)))</code>；成员类型不匹配时先别管，测试只检查地址。</div>
+        <div class="hint"><b>提示 2 · 遍历</b>从 <code>head-&gt;next</code> 开始，每步 <code>kc_list_entry(pos-&gt;member.next, ...)</code>，终止条件是 <code>&amp;pos-&gt;member == head</code>。</div>
+        <div class="hint"><b>提示 3 · 错误指针</b><code>ERR_PTR</code> 直接强转，<code>IS_ERR</code> 判断无符号值是否 ≥ <code>-4095</code>，<code>PTR_ERR</code> 转回 <code>long</code>。</div>
+      </details>
+
+      <p class="lab-foot">终端检查：<code>node linux-course/check.mjs lab-kernel-c</code>；恢复骨架：<code>node linux-course/lab.mjs restore lab-kernel-c</code>。</p>
+    </div>
+  </div>
+
+  <section class="section" id="s1-2" data-title="1.2 地址空间：__user、__iomem、DMA" data-read="7" data-check="5" data-next="下一节：四个对象">
+    <span class="section-label">模块 1 · 小节 2</span>
+    <h3>地址空间：<code>__user</code>、<code>__iomem</code>、DMA</h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
+    <figure class="video-block section-video">
+      <video controls preload="metadata" poster="assets/sec-s1-2-poster.jpg" aria-label="本节视频：s1-2">
+        <source src="assets/sec-s1-2.mp4" type="video/mp4">
+        你的浏览器不支持视频标签。
+      </video>
+      <figcaption><span>本节视频 · 看完就能动手</span><span>命令与源码来自 linux-src/</span></figcaption>
+    </figure>
+
+    <div class="screen">
+      <p>“地址”在内核里不是一个概念，而是四个：用户虚拟地址、内核虚拟地址、设备 MMIO 地址、DMA 总线地址。它们的解引用方式完全不同。</p>
+      <figure class="diagram">
+        <div class="diagram-note">四类地址</div>
+        <div class="mermaid">
+flowchart TB
+  U["用户虚拟地址<br/>__user"] -->|"copy_from_user"| K["内核虚拟地址<br/>直接解引用"]
+  D["设备 MMIO<br/>__iomem"] -->|"readl / writel"| K
+  P["物理 / DMA 地址<br/>dma_addr_t"] -->|"dma_map / dma_unmap"| K
+  K -->|"copy_to_user"| U
+        </div>
+        <figcaption>编译器只能帮你标出地址空间；真正的合法性来自访问接口与映射关系。</figcaption>
+        <details><summary>图源</summary><pre>flowchart TB
+  U[__user] -->|copy_from_user| K[kernel virtual]
+  D[__iomem] -->|readl/writel| K
+  P[dma_addr_t] -->|dma_map| K
+  K -->|copy_to_user| U</pre></details>
+      </figure>
+      <div class="code">
+        <div class="code-head"><span>include/linux/compiler_types.h:50</span></div>
+        <pre><code># define __user		__attribute__((noderef, address_space(__user)))
+# define __iomem	__attribute__((noderef, address_space(__iomem)))</code></pre>
+      </div>
+      <p><code>__user</code> 不是运行时检查，而是 sparse 的标记：它让“直接解引用用户指针”在静态分析里报警。运行时仍然要靠 <code>access_ok</code> 与 <code>copy_*_user</code>。</p>
+    </div>
+
+    <div class="micro" data-micro data-good="b">
+      <p class="micro-q"><span class="tag">预测</span>驱动拿到一个 <code>void __iomem *base</code>，读寄存器应该用：</p>
+      <div class="micro-actions">
+        <button data-pick="a">直接 <code>*(u32 *)base</code></button>
+        <button data-pick="b"><code>readl(base + off)</code></button>
+        <button data-pick="c"><code>copy_from_user</code></button>
+      </div>
+      <div class="micro-result" hidden data-msg-a="MMIO 不能用普通解引用，编译器和 CPU 都可能重排。" data-msg-b="对。readl/writel 处理端序、屏障与 MMIO 语义。"></div>
+    </div>
+
+    <div class="screen">
+      <h4>为什么不能直接解引用用户指针</h4>
+      <p>用户地址可能未映射、可能被换出、可能属于另一个进程。直接读会触发 kernel oops，而不是返回 <code>-EFAULT</code>。正确路径是让 uaccess 在异常表保护下访问。</p>
+      <div class="code">
+        <div class="code-head"><span>include/linux/uaccess.h · __copy_from_user</span></div>
+        <pre><code>static __always_inline __must_check unsigned long
+__copy_from_user(void *to, const void __user *from, unsigned long n)
+{
+	unsigned long res;
+
+	might_fault();
+	instrument_copy_from_user_before(to, from, n);
+	if (should_fail_usercopy())
+		return n;
+	check_object_size(to, n, false);
+	res = raw_copy_from_user(to, from, n);
+	instrument_copy_from_user_after(to, from, n, res);
+	return res;
+}</code></pre>
+      </div>
+      <div class="callout">
+        <span class="label">DMA 的地址</span>
+        <p>设备看到的地址不一定是 CPU 物理地址：<code>dma_map_single()</code> 返回 <code>dma_addr_t</code>，要由 IOMMU 或平台翻译。CPU 用内核虚拟地址，设备用 DMA 地址，两者不能混。</p>
+      </div>
+    </div>
+
+    <figure class="diagram">
+      <div class="diagram-note">一次用户拷贝</div>
+      <div class="mermaid">
+sequenceDiagram
+  participant U as 用户地址
+  participant K as 内核
+  U->>K: copy_from_user(to, from, n)
+  K->>K: access_ok + 异常表保护
+  alt 成功
+    K-->>U: 0
+  else 失败
+    K-->>U: 未拷贝字节数
+  end
+      </div>
+      <figcaption>uaccess 把“可能 fault 的用户访问”包在可恢复的异常表里，失败返回剩余字节数。</figcaption>
+      <details><summary>图源</summary><pre>sequenceDiagram
+  U->>K: copy_from_user
+  K->>K: access_ok + extable
+  alt ok
+    K-->>U: 0
+  else fault
+    K-->>U: remaining</pre></details>
+    </figure>
+    <div class="gate">
+      <div class="gate-step">
+        <div class="gate-step-head"><span class="step-num">1</span><h4>检查理解</h4><span class="gate-time">≈2 分钟 · 不计分</span></div>
+
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">1.</span><code>__user</code> 的作用是：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="s1-2-q1" value="a"><span><span class="opt-key">A</span> 运行时检查地址是否有效<span class="opt-why">运行时检查靠 access_ok / uaccess fault 处理。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="s1-2-q1" value="b"><span><span class="opt-key">B</span> 标记地址空间，让静态分析发现混用<span class="opt-why">对。sparse 用它检查“用户指针是否被当内核指针解引用”。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="s1-2-q1" value="c"><span><span class="opt-key">C</span> 把用户地址映射到内核<span class="opt-why">它只是标注，不做映射。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>标注 + uaccess 接口，两者缺一不可。</p>
+        </fieldset>
+
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">2.</span>MMIO 寄存器为什么用 <code>readl</code> 而不是普通解引用？</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="s1-2-q2" value="a"><span><span class="opt-key">A</span> 因为寄存器地址一定无效<span class="opt-why">映射后地址有效，但语义不同。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="s1-2-q2" value="b"><span><span class="opt-key">B</span> 需要端序、屏障与设备访问语义<span class="opt-why">对。readl/writel 处理这些，普通访存可能被重排或合并。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="s1-2-q2" value="c"><span><span class="opt-key">C</span> 因为 C 不允许指针算术<span class="opt-why">C 允许，问题在设备语义。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden><code>__iomem</code> 只是提醒；readl/writel 才提供正确语义。</p>
+        </fieldset>
+
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">3.</span>驱动把 buffer 交给设备前，正确的地址是：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="s1-2-q3" value="a"><span><span class="opt-key">A</span> 用户态指针<span class="opt-why">设备不能直接访问用户虚拟地址。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="s1-2-q3" value="b"><span><span class="opt-key">B</span> <code>dma_map_single()</code> 返回的 <code>dma_addr_t</code><span class="opt-why">对。它经过 IOMMU/平台翻译，是设备能用的总线地址。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="s1-2-q3" value="c"><span><span class="opt-key">C</span> 内核虚拟地址<span class="opt-why">CPU 能用，设备不一定能。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>CPU 虚拟地址、物理地址、DMA 地址三者要分清。</p>
+        </fieldset>
+      </div>
+
+      <div class="gate-step">
+        <div class="gate-step-head"><span class="step-num">2</span><h4>用自己的话解释</h4><span class="gate-time">≈3 分钟 · 本地保存</span></div>
+        <div class="sa" data-sa="s1-2">
+          <label class="sa-label" for="sa-s1-2">用 3–4 句话解释：为什么内核不能直接解引用 <code>__user</code> 指针？如果直接解引用，最坏会发生什么，正确路径是什么？</label>
+          <textarea id="sa-s1-2" rows="4" placeholder="从地址有效性、异常处理、copy_from_user 三点想……"></textarea>
+          <div class="sa-meta"><span class="wordcount">0 字</span><span class="save-status" aria-live="polite"></span><span class="spacer"></span><button type="button" class="textbtn" data-clear>清空</button></div>
+          <div class="sa-actions">
+            <button type="button" class="btn secondary small" data-reveal>查看参考答案</button>
+            <button type="button" class="textbtn" data-stuck>我卡住了</button>
+            <button type="button" class="textbtn" data-copy-mine>复制我的答案</button>
+          </div>
+          <div class="model" hidden>
+            <span class="model-kicker">参考答案</span>
+            <p>用户地址属于当前进程的地址空间，可能未映射、被换出、甚至是恶意构造的地址；直接解引用会把用户态的可恢复错误变成内核 oops。内核需要 uaccess 接口在异常表保护下访问，失败时返回 <code>-EFAULT</code>，并由调用方决定是否回滚。正确路径是先做范围检查，再用 <code>copy_from_user</code>/<code>copy_to_user</code> 或 <code>get_user</code>/<code>put_user</code>。</p>
+          </div>
+          <div class="selfcheck" aria-label="自查">
+            <label><input type="checkbox"> 我说明了用户地址可能无效/换页。</label>
+            <label><input type="checkbox"> 我说明了直接解引用会 oops。</label>
+            <label><input type="checkbox"> 我指出了 copy_*_user / EFAULT 的正确路径。</label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="recap">
+      <h4>本小节可以带走</h4>
+      <ul>
+        <li>四类地址：用户虚拟、内核虚拟、MMIO、DMA。</li>
+        <li><code>__user</code>/<code>__iomem</code> 是静态标记，运行时靠接口。</li>
+        <li>用户拷贝失败返回 <code>-EFAULT</code>，不能直接解引用。</li>
+      </ul>
+    </div>
+  </section>
+
+  <div class="lab" data-lab="lab-module" id="lab-module">
+    <div class="lab-head">
+      <div class="lab-kicker">实验 1 · 30 分钟 · 难度：中 · 需要 Lima VM</div>
+      <h3>写第一个内核模块：<code>/proc/hello</code></h3>
+      <p class="lab-sub">在真实的 Ubuntu 内核里编译、加载、读取、卸载。不是模拟。</p>
+    </div>
+    <div class="lab-body">
+      <p class="lab-broken"><span class="label">当前状态</span><code>hello_init</code> 什么也不做，<code>/proc/hello</code> 不存在；加载模块不会报错，但读不到内容。</p>
+
+      <div class="lab-grid">
+        <div>
+          <h4>任务</h4>
+          <ol class="task-list">
+            <li>实现 <code>hello_show</code>，输出 <code>hello from kernel</code>。</li>
+            <li>实现 <code>hello_open</code>，用 <code>single_open</code>。</li>
+            <li>在 init 里 <code>proc_create("hello", 0444, NULL, &amp;hello_ops)</code>。</li>
+            <li>在 exit 里 <code>proc_remove</code>。</li>
+            <li>VM 里 <code>make</code>、<code>insmod</code>、<code>cat /proc/hello</code>、<code>rmmod</code>。</li>
+          </ol>
+          <h4>交付物</h4>
+          <div class="pathline"><code>linux-course/work/lab-module/hello.c</code><button class="copy" data-copy="linux-course/work/lab-module/hello.c">复制路径</button></div>
+          <h4>构建</h4>
+          <pre class="term"><span class="p">$</span> make
+<span class="p">$</span> sudo insmod hello.ko
+<span class="p">$</span> cat /proc/hello</pre>
+        </div>
+        <div>
+          <h4>只读预览</h4>
+          <div class="lab-preview"><pre>static int hello_show(struct seq_file *m, void *v)
+{
+	/* TODO: 输出 hello from kernel */
+	return 0;
+}
+
+static int __init hello_init(void)
+{
+	/* TODO: proc_create */
+	return 0;
+}</pre></div>
+          <div class="lab-actions">
+            <button type="button" class="btn" data-check>检查我的实验</button>
+            <span class="lab-status">在 Lima VM 内编译与加载</span>
+          </div>
+          <div class="lab-results" hidden></div>
+        </div>
+      </div>
+
+      <details class="hints">
+        <summary>三级提示</summary>
+        <div class="hint"><b>提示 1 · 输出</b><code>seq_puts(m, "hello from kernel\n");</code></div>
+        <div class="hint"><b>提示 2 · open</b><code>return single_open(file, hello_show, NULL);</code>；read/lseek/release 已经配好。</div>
+        <div class="hint"><b>提示 3 · 生命周期</b>init 里保存返回值，失败返回 <code>-ENOMEM</code>；exit 里 <code>proc_remove(hello_entry)</code>。</div>
+      </details>
+
+      <p class="lab-foot">终端检查：<code>node linux-course/check.mjs lab-module</code>；VM 未就绪时先运行 <code>node linux-course/vm.mjs setup</code>。</p>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="module" id="m2" data-num="2" data-title="网络栈地图与地址">
+<div class="wrap">
+  <header class="module-head">
+    <div class="module-num">02</div>
+    <h2>网络栈地图与地址</h2>
+    <p class="lede">内核网络栈只有四个核心对象：socket、sock、sk_buff、net_device。地址则决定“从哪个对象找到下一个对象”。先把地图和地址表示钉死。</p>
+  </header>
+
+  <section class="section" id="s2-1" data-title="2.1 四个对象" data-read="7" data-check="5" data-next="下一节：地址">
+    <span class="section-label">模块 2 · 小节 1</span>
+    <h3>四个对象</h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
+    <figure class="video-block section-video">
+      <video controls preload="metadata" poster="assets/sec-s2-1-poster.jpg" aria-label="本节视频：s2-1">
+        <source src="assets/sec-s2-1.mp4" type="video/mp4">
+        你的浏览器不支持视频标签。
+      </video>
+      <figcaption><span>本节视频 · 看完就能动手</span><span>命令与源码来自 linux-src/</span></figcaption>
+    </figure>
+
+    <div class="screen">
+      <p>用户态看到的 fd，在内核里先变成一个 <code>struct file</code>，再由 <code>sock_from_file</code> 找到 <code>struct socket</code>；socket 里挂着协议状态 <code>struct sock</code>，数据包则是 <code>sk_buff</code>，出口是 <code>net_device</code>。</p>
+      <figure class="diagram">
+        <div class="diagram-note">一次发送路径上的对象</div>
+        <div class="mermaid">
+flowchart LR
+  FD["fd"] --> F["struct file"]
+  F --> S["struct socket<br/>ops / sk"]
+  S --> SK["struct sock<br/>协议状态"]
+  SK --> SKB["struct sk_buff<br/>这一包的字节"]
+  SKB --> D["struct net_device<br/>出口"]
+  D --> N["NAPI / 驱动"]
+        </div>
+        <figcaption>socket 是“用户接口”，sock 是“协议状态”，skb 是“在路上的包”，dev 是“从哪出去”。</figcaption>
+        <details><summary>图源</summary><pre>flowchart LR
+  fd --> file --> socket --> sock --> skb --> net_device --> napi</pre></details>
+      </figure>
+      <div class="code">
+        <div class="code-head"><span>include/linux/net.h:192 · struct socket</span></div>
+        <pre><code>struct socket {
+	socket_state		state;
+	short			type;
+	unsigned long		flags;
+	struct file		*file;
+	struct sock		*sk;
+	const struct proto_ops	*ops; /* Might change with MPTCP. */
+	struct socket_wq	wq;
+};</code></pre>
+      </div>
+      <p><code>ops</code> 是协议族的方法表：<code>sendmsg</code>、<code>recvmsg</code>、<code>connect</code> 都从这里分派。socket 本身不保存 TCP 状态，状态在 <code>sk</code> 里。</p>
+    </div>
+
+    <div class="micro" data-micro data-good="b">
+      <p class="micro-q"><span class="tag">定位</span>TCP 的拥塞窗口、序列号这类状态，最可能放在哪个对象里？</p>
+      <div class="micro-actions">
+        <button data-pick="a">struct socket</button>
+        <button data-pick="b">struct sock</button>
+        <button data-pick="c">struct sk_buff</button>
+      </div>
+      <div class="micro-result" hidden data-msg-a="socket 是用户接口层，不存协议状态。" data-msg-b="对。struct sock（TCP 下是 struct tcp_sock）存协议状态；skb 只描述单个包。"></div>
+    </div>
+
+    <div class="screen">
+      <h4>sk_buff 与 net_device</h4>
+      <p><code>sk_buff</code> 不是“一块内存”，而是“一块内存 + 四个指针 + 元数据”。同样一块 buffer，协议层可以不断 push/pull 头部，而不复制数据。</p>
+      <div class="code">
+        <div class="code-head"><span>include/linux/skbuff.h:892 · struct sk_buff（节选）</span></div>
+        <pre><code>struct sk_buff {
+	union {
+		struct {
+			struct sk_buff		*next;
+			struct sk_buff		*prev;
+			union {
+				struct net_device	*dev;
+				unsigned long		dev_scratch;
+			};
+		};
+		struct rb_node		rbnode;
+		struct list_head	list;
+		struct llist_node	ll_node;
+	};
+
+	struct sock		*sk;
+	...
+	unsigned char		*head, *data, *tail, *end;
+};</code></pre>
+      </div>
+      <p><code>net_device</code> 是接口对象，方法表 <code>net_device_ops</code> 里的 <code>ndo_start_xmit</code> 是发送入口。<code>NAPI</code> 则把收包中断变成轮询，减少高负载下的中断开销。</p>
+    </div>
+
+    <div class="gate">
+      <div class="gate-step">
+        <div class="gate-step-head"><span class="step-num">1</span><h4>检查理解</h4><span class="gate-time">≈2 分钟 · 不计分</span></div>
+
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">1.</span><code>struct socket</code> 与 <code>struct sock</code> 的关系是：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="s2-1-q1" value="a"><span><span class="opt-key">A</span> 同一个对象的两层 typedef<span class="opt-why">它们是不同结构体，socket 里保存 sock 指针。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="s2-1-q1" value="b"><span><span class="opt-key">B</span> socket 是用户接口，sock 是协议状态<span class="opt-why">对。socket 提供 file/ops，sock 保存 TCP/UDP 状态。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="s2-1-q1" value="c"><span><span class="opt-key">C</span> sock 只用于收包<span class="opt-why">收发都围绕 sock。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>把“用户接口 / 协议状态 / 单个包 / 设备”四层分开，后面读代码会快很多。</p>
+        </fieldset>
+
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">2.</span><code>sk_buff</code> 里的 <code>head/data/tail/end</code> 主要用于：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="s2-1-q2" value="a"><span><span class="opt-key">A</span> 记录 TCP 状态<span class="opt-why">TCP 状态在 sock/tcp_sock。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="s2-1-q2" value="b"><span><span class="opt-key">B</span> 在同一个 buffer 上 push/pull 协议头<span class="opt-why">对。data/tail 移动，避免每层复制。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="s2-1-q2" value="c"><span><span class="opt-key">C</span> 保存路由表<span class="opt-why">路由在 FIB/rtable，不在 skb 的这四个指针里。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden><code>skb_reserve</code>/<code>put</code>/<code>push</code>/<code>pull</code> 就是在移动这些指针。</p>
+        </fieldset>
+
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">3.</span>数据包从协议层交给驱动，最直接的入口是：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="s2-1-q3" value="a"><span><span class="opt-key">A</span> <code>ndo_open</code><span class="opt-why">那是接口 up 时调用。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="s2-1-q3" value="b"><span><span class="opt-key">B</span> <code>ndo_start_xmit</code><span class="opt-why">对。qdisc 之后调用驱动的发送函数。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="s2-1-q3" value="c"><span><span class="opt-key">C</span> <code>ndo_get_stats64</code><span class="opt-why">那是读统计。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden><code>net_device_ops</code> 里每个回调对应一个生命周期动作。</p>
+        </fieldset>
+      </div>
+
+      <div class="gate-step">
+        <div class="gate-step-head"><span class="step-num">2</span><h4>用自己的话解释</h4><span class="gate-time">≈3 分钟 · 本地保存</span></div>
+        <div class="sa" data-sa="s2-1">
+          <label class="sa-label" for="sa-s2-1">用 3–4 句话解释：为什么内核要把“通信端点”拆成 socket 与 sock 两个对象？这种拆分给协议族扩展带来什么好处？</label>
+          <textarea id="sa-s2-1" rows="4" placeholder="从用户接口、协议状态、ops 分派三个角度……"></textarea>
+          <div class="sa-meta"><span class="wordcount">0 字</span><span class="save-status" aria-live="polite"></span><span class="spacer"></span><button type="button" class="textbtn" data-clear>清空</button></div>
+          <div class="sa-actions">
+            <button type="button" class="btn secondary small" data-reveal>查看参考答案</button>
+            <button type="button" class="textbtn" data-stuck>我卡住了</button>
+            <button type="button" class="textbtn" data-copy-mine>复制我的答案</button>
+          </div>
+          <div class="model" hidden>
+            <span class="model-kicker">参考答案</span>
+            <p>socket 面向 fd/file 与通用系统调用，提供稳定的用户接口；sock 面向具体协议，保存 TCP/UDP 的状态、队列与回调。两者通过 socket-&gt;sk 和 proto_ops 连接，新增协议族只需实现自己的 sock 与 ops，不必改系统调用层。这样既隔离了用户 ABI，又让协议实现可以复用通用的 socket 生命周期。</p>
+          </div>
+          <div class="selfcheck" aria-label="自查">
+            <label><input type="checkbox"> 我区分了用户接口与协议状态。</label>
+            <label><input type="checkbox"> 我提到了 proto_ops 的分派作用。</label>
+            <label><input type="checkbox"> 我说出了扩展新协议族的好处。</label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="recap">
+      <h4>本小节可以带走</h4>
+      <ul>
+        <li>fd → file → socket → sock → skb → net_device。</li>
+        <li>socket 是接口，sock 是状态，skb 是包，dev 是出口。</li>
+        <li><code>ndo_start_xmit</code> 是驱动发送入口。</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="s2-2" data-title="2.2 地址：sockaddr、IP、CIDR、MAC" data-read="7" data-check="5" data-next="下一节：socket()">
+    <span class="section-label">模块 2 · 小节 2</span>
+    <h3>地址：sockaddr、IP、CIDR、MAC</h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
+    <figure class="video-block section-video">
+      <video controls preload="metadata" poster="assets/sec-s2-2-poster.jpg" aria-label="本节视频：s2-2">
+        <source src="assets/sec-s2-2.mp4" type="video/mp4">
+        你的浏览器不支持视频标签。
+      </video>
+      <figcaption><span>本节视频 · 看完就能动手</span><span>命令与源码来自 linux-src/</span></figcaption>
+    </figure>
+
+    <div class="screen">
+      <p>网络里的“地址”至少有三层：<code>sockaddr</code>（API 表示）、IP 地址（网络层）、MAC 地址（链路层）。它们的字节序、长度和含义都不同。</p>
+      <figure class="diagram">
+        <div class="diagram-note">地址的三层表示</div>
+        <div class="mermaid">
+flowchart TB
+  A["应用：sockaddr_in<br/>family + port + 4 字节地址"] --> B["IP：__be32<br/>10.0.0.1"]
+  B --> C["路由：前缀 + 掩码<br/>10.0.0.0/8"]
+  C --> D["链路：MAC<br/>02:42:ac:11:00:02"]
+        </div>
+        <figcaption>同一台主机在不同层有不同“地址”；转换与查表是网络栈的主要工作之一。</figcaption>
+        <details><summary>图源</summary><pre>flowchart TB
+  sockaddr_in --> IP[__be32] --> route[prefix/mask] --> MAC</pre></details>
+      </figure>
+      <div class="code">
+        <div class="code-head"><span>include/uapi/linux/in.h:260 · sockaddr_in</span></div>
+        <pre><code>struct sockaddr_in {
+  __kernel_sa_family_t	sin_family;	/* Address family */
+  __be16		sin_port;	/* Port number */
+  struct in_addr	sin_addr;	/* Internet address */
+  unsigned char		__pad[__SOCK_SIZE__ - ...];
+};</code></pre>
+      </div>
+      <p><code>sin_port</code> 和 <code>sin_addr</code> 都是<strong>网络字节序</strong>；<code>sin_family</code> 是本机字节序。混用是网络代码最常见的 bug 之一。</p>
+    </div>
+
+    <div class="micro" data-micro data-good="b">
+      <p class="micro-q"><span class="tag">预测</span><code>inet_addr("10.0.0.1")</code> 在 little-endian 机器上得到的 32 位整数，内存里第一个字节是：</p>
+      <div class="micro-actions">
+        <button data-pick="a">0x0a</button>
+        <button data-pick="b">0x01</button>
+        <button data-pick="c">0x00</button>
+      </div>
+      <div class="micro-result" hidden data-msg-a="那是大端表示；网络字节序在内存里就是你看到的顺序。" data-msg-b="网络字节序是大端：10 在最低地址，所以内存第一个字节是 0x0a。"></div>
+    </div>
+
+    <div class="screen">
+      <h4>CIDR 与最长前缀</h4>
+      <p>路由表不按“完整 IP”匹配，而按前缀长度匹配：<code>10.1.2.0/24</code> 比 <code>10.0.0.0/8</code> 更具体。查找时取最长匹配，这就是 FIB 的核心。</p>
+      <p>MAC 地址则是 6 字节链路层标识，由 ARP/ND 从 IP 解析出来。IP 是端到端的逻辑地址，MAC 是逐跳的物理地址。</p>
+      <div class="callout">
+        <span class="label">内核里的地址类型</span>
+        <p><code>__be32</code> 表示“大端 32 位”，<code>__be16</code> 表示大端 16 位；<code>u32</code> 是本机字节序。读网络代码时，先看类型，再决定是否需要 <code>ntohl</code>/<code>htonl</code>。</p>
+      </div>
+    </div>
+
+    <figure class="diagram">
+      <div class="diagram-note">sockaddr 家族</div>
+      <div class="mermaid">
+classDiagram
+  class sockaddr_in {
+    sin_family
+    sin_port
+    sin_addr
+  }
+  class in_addr {
+    s_addr __be32
+  }
+  class sockaddr_in6 {
+    sin6_family
+    sin6_port
+    sin6_addr
+  }
+  sockaddr_in --> in_addr
+      </div>
+      <figcaption>IPv4 与 IPv6 的 sockaddr 结构不同，但都通过 family 字段让内核选择解析方式。</figcaption>
+      <details><summary>图源</summary><pre>classDiagram
+  sockaddr_in --> in_addr
+  sockaddr_in6</pre></details>
+    </figure>
+    <div class="gate">
+      <div class="gate-step">
+        <div class="gate-step-head"><span class="step-num">1</span><h4>检查理解</h4><span class="gate-time">≈2 分钟 · 不计分</span></div>
+
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">1.</span><code>sockaddr_in.sin_port</code> 的字节序是：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="s2-2-q1" value="a"><span><span class="opt-key">A</span> 本机字节序<span class="opt-why">端口字段是网络字节序。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="s2-2-q1" value="b"><span><span class="opt-key">B</span> 网络字节序（大端）<span class="opt-why">对。用 htons/ntohs 转换。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="s2-2-q1" value="c"><span><span class="opt-key">C</span> 取决于协议<span class="opt-why">sockaddr_in 固定网络字节序。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden><code>sin_family</code> 例外，它是本机字节序。</p>
+        </fieldset>
+
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">2.</span>路由查找 <code>10.1.2.3</code>，同时有 <code>10.0.0.0/8</code> 与 <code>10.1.0.0/16</code>，应选：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="s2-2-q2" value="a"><span><span class="opt-key">A</span> /8，因为它更短<span class="opt-why">更短意味着更宽泛，不是更具体。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="s2-2-q2" value="b"><span><span class="opt-key">B</span> /16，最长前缀匹配<span class="opt-why">对。两个都匹配时，前缀更长者胜出。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="s2-2-q2" value="c"><span><span class="opt-key">C</span> 随机选一个<span class="opt-why">路由必须确定性。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>Lab 4 会让你自己实现这个规则。</p>
+        </fieldset>
+
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">3.</span>ARP 的作用是：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="s2-2-q3" value="a"><span><span class="opt-key">A</span> 把域名解析成 IP<span class="opt-why">那是 DNS。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="s2-2-q3" value="b"><span><span class="opt-key">B</span> 在同一链路内把 IP 解析成 MAC<span class="opt-why">对。IPv6 用 ND（邻居发现）做同一件事。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="s2-2-q3" value="c"><span><span class="opt-key">C</span> 分配 IP 地址<span class="opt-why">那是 DHCP。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>IP 负责端到端，MAC 负责逐跳；ARP/ND 是两者之间的桥。</p>
+        </fieldset>
+      </div>
+
+      <div class="gate-step">
+        <div class="gate-step-head"><span class="step-num">2</span><h4>用自己的话解释</h4><span class="gate-time">≈3 分钟 · 本地保存</span></div>
+        <div class="sa" data-sa="s2-2">
+          <label class="sa-label" for="sa-s2-2">用 3–4 句话解释：为什么 <code>sockaddr_in</code> 里端口和地址用网络字节序，而 <code>sin_family</code> 用本机字节序？如果混用会看到什么现象？</label>
+          <textarea id="sa-s2-2" rows="4" placeholder="从协议线上格式与本机 ABI 两个角度……"></textarea>
+          <div class="sa-meta"><span class="wordcount">0 字</span><span class="save-status" aria-live="polite"></span><span class="spacer"></span><button type="button" class="textbtn" data-clear>清空</button></div>
+          <div class="sa-actions">
+            <button type="button" class="btn secondary small" data-reveal>查看参考答案</button>
+            <button type="button" class="textbtn" data-stuck>我卡住了</button>
+            <button type="button" class="textbtn" data-copy-mine>复制我的答案</button>
+          </div>
+          <div class="model" hidden>
+            <span class="model-kicker">参考答案</span>
+            <p>端口和 IP 会进入网络协议头，线上格式固定为大端，所以必须用网络字节序，跨架构才能互通。<code>sin_family</code> 只在本地 API/内核之间传递，不进入线上协议，因此沿用本机字节序更自然。若混用，典型现象是端口“看起来”变成 0x1f90 与 0x901f 互换、连接打到一个不存在的端口，或地址字节序颠倒导致路由/绑定失败。</p>
+          </div>
+          <div class="selfcheck" aria-label="自查">
+            <label><input type="checkbox"> 我说明了线上格式固定为大端。</label>
+            <label><input type="checkbox"> 我说明了 family 不进入协议头。</label>
+            <label><input type="checkbox"> 我给出了混用后的具体现象。</label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="recap">
+      <h4>本小节可以带走</h4>
+      <ul>
+        <li><code>sockaddr_in</code> 的端口/地址是网络字节序，family 不是。</li>
+        <li>路由按最长前缀匹配，不是完整地址相等。</li>
+        <li>IP 端到端，MAC 逐跳，ARP/ND 负责解析。</li>
+      </ul>
+    </div>
+  </section>
+
+  <div class="lab" data-lab="lab-sockaddr" id="lab-sockaddr">
+    <div class="lab-head">
+      <div class="lab-kicker">实验 2 · 20 分钟 · 难度：中</div>
+      <h3>解析地址：IPv4、CIDR、MAC</h3>
+      <p class="lab-sub">把“地址”从字符串变成网络字节序，再判断一个地址是否落在网段里。</p>
+    </div>
+    <div class="lab-body">
+      <p class="lab-broken"><span class="label">当前状态</span><code>sockaddr.c</code> 全部返回 -1；测试无法解析出任何地址。</p>
+
+      <div class="lab-grid">
+        <div>
+          <h4>任务</h4>
+          <ol class="task-list">
+            <li>实现 <code>kc_parse_ipv4</code> / <code>kc_format_ipv4</code>。</li>
+            <li>实现 <code>kc_parse_cidr</code>，支持 /0 到 /32。</li>
+            <li>实现 <code>kc_cidr_contains</code>（按前缀掩码比较）。</li>
+            <li>实现 <code>kc_parse_mac</code>，只接受冒号分隔。</li>
+          </ol>
+          <h4>交付物</h4>
+          <div class="pathline"><code>linux-course/work/lab-sockaddr/sockaddr.c</code><button class="copy" data-copy="linux-course/work/lab-sockaddr/sockaddr.c">复制路径</button></div>
+          <h4>约束</h4>
+          <ul>
+            <li>返回值统一用网络字节序。</li>
+            <li>拒绝越界输入（256、/33、错误分隔符）。</li>
+            <li><code>-Wall -Wextra -Werror</code> 必须通过。</li>
+          </ul>
+        </div>
+        <div>
+          <h4>只读预览</h4>
+          <div class="lab-preview"><pre>int kc_parse_cidr(const char *s,
+                  uint32_t *net_be, int *prefix)
+{
+	/* TODO: 10.0.0.0/8 */
+	return -1;
+}
+
+bool kc_cidr_contains(uint32_t net_be,
+                      int prefix,
+                      uint32_t addr_be)
+{
+	/* TODO: 掩码比较 */
+	return false;
+}</pre></div>
+          <div class="lab-actions">
+            <button type="button" class="btn" data-check>检查我的实验</button>
+            <span class="lab-status">clang 编译 + 单测</span>
+          </div>
+          <div class="lab-results" hidden></div>
+        </div>
+      </div>
+
+      <details class="hints">
+        <summary>三级提示</summary>
+        <div class="hint"><b>提示 1 · 字节序</b>可以用 <code>inet_pton</code>/<code>inet_ntop</code>；CIDR 里的掩码要先 <code>ntohl</code> 再移位。</div>
+        <div class="hint"><b>提示 2 · /0 与 /32</b><code>prefix == 0</code> 时掩码为 0；<code>prefix == 32</code> 时为 0xffffffff，避免移位 32 位。</div>
+        <div class="hint"><b>提示 3 · MAC</b><code>sscanf("%2x:%2x:...%c", ...)</code> 的返回值必须是 6，多一个字符就拒绝。</div>
+      </details>
+
+      <p class="lab-foot">终端检查：<code>node linux-course/check.mjs lab-sockaddr</code>；恢复骨架：<code>node linux-course/lab.mjs restore lab-sockaddr</code>。</p>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="module" id="m3" data-num="3" data-title="socket 与发送路径">
+<div class="wrap">
+  <header class="module-head">
+    <div class="module-num">03</div>
+    <h2>socket 与发送路径</h2>
+    <p class="lede">用户态一句 <code>sendto</code>，在内核里先找 fd，再找 socket，再按协议族分派到 TCP/UDP。这一段是“从系统调用进入协议”的门口。</p>
+  </header>
+
+  <section class="section" id="s3-1" data-title="3.1 从 socket() 到 proto_ops" data-read="7" data-check="5" data-next="下一节：sendto">
+    <span class="section-label">模块 3 · 小节 1</span>
+    <h3>从 <code>socket()</code> 到 <code>proto_ops</code></h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
+    <figure class="video-block section-video">
+      <video controls preload="metadata" poster="assets/sec-s3-1-poster.jpg" aria-label="本节视频：s3-1">
+        <source src="assets/sec-s3-1.mp4" type="video/mp4">
+        你的浏览器不支持视频标签。
+      </video>
+      <figcaption><span>本节视频 · 看完就能动手</span><span>命令与源码来自 linux-src/</span></figcaption>
+    </figure>
+
+    <div class="screen">
+      <p><code>socket(AF_INET, SOCK_STREAM, 0)</code> 不是“创建一个 TCP 连接”，而是创建对象、选择协议族、把方法表装好。真正的连接在 <code>connect</code>。</p>
+      <figure class="diagram">
+        <div class="diagram-note">socket() 的分派</div>
+        <div class="mermaid">
+sequenceDiagram
+  participant U as 用户
+  participant S as __sys_socket
+  participant C as __sock_create
+  participant F as inet_create
+  participant P as proto_ops
+  U->>S: socket(AF_INET, SOCK_STREAM, 0)
+  S->>S: sock_alloc()
+  S->>C: family/type/protocol
+  C->>F: inetsw[type] 匹配
+  F->>P: 设置 sock->ops = inet_stream_ops
+  P-->>U: fd
+        </div>
+        <figcaption>系统调用只负责“造对象 + 装方法表”；连接、发送、接收都由 ops 分派。</figcaption>
+        <details><summary>图源</summary><pre>sequenceDiagram
+  U->>__sys_socket: socket()
+  __sys_socket->>__sock_create: family/type
+  __sock_create->>inet_create: match inetsw
+  inet_create->>proto_ops: set ops
+  proto_ops-->>U: fd</pre></details>
+      </figure>
+    </div>
+
+    <div class="screen">
+      <h4>关键代码</h4>
+      <div class="code">
+        <div class="code-head"><span>net/socket.c:1608 · __sock_create（节选）</span></div>
+        <pre><code>int __sock_create(struct net *net, int family, int type, int protocol,
+			 struct socket **res, int kern)
+{
+	int err;
+	struct socket *sock;
+	const struct net_proto_family *pf;
+
+	if (family &lt; 0 || family &gt;= NPROTO)
+		return -EAFNOSUPPORT;
+	...
+	sock = sock_alloc();
+	if (!sock)
+		return -ENFILE;
+	sock-&gt;type = type;
+	...
+	pf = rcu_dereference(net_families[family]);
+	err = pf-&gt;create(net, sock, protocol, kern);
+	...
+}</code></pre>
+      </div>
+      <p><code>inet_create</code> 在 <code>net/ipv4/af_inet.c</code> 里，它按 <code>type</code> 在 <code>inetsw</code> 表里找协议，最后把 <code>sock-&gt;ops</code> 指向 <code>inet_stream_ops</code> 或 <code>inet_dgram_ops</code>。</p>
+      <div class="code">
+        <div class="code-head"><span>include/linux/net.h:236 · struct proto_ops（节选）</span></div>
+        <pre><code>struct proto_ops {
+	int		family;
+	struct module	*owner;
+	int		(*release)   (struct socket *sock);
+	int		(*bind)	     (struct socket *sock,
+				      struct sockaddr_unsized *myaddr,
+				      int sockaddr_len);
+	int		(*connect)   (struct socket *sock,
+				      struct sockaddr_unsized *vaddr,
+				      int sockaddr_len, int flags);
+	...
+	int		(*sendmsg)   (struct socket *sock, struct msghdr *m,
+				      size_t total_len);
+};</code></pre>
+      </div>
+    </div>
+
+    <div class="micro" data-micro data-good="b">
+      <p class="micro-q"><span class="tag">预测</span>调用 <code>socket(AF_INET, SOCK_STREAM, 0)</code> 后，协议状态 <code>struct sock</code> 一定已经完整初始化了吗？</p>
+      <div class="micro-actions">
+        <button data-pick="a">是，socket() 就建立连接</button>
+        <button data-pick="b">不一定，connect 才建立连接并完成协议状态</button>
+        <button data-pick="c">只有 UDP 需要 sock</button>
+      </div>
+      <div class="micro-result" hidden data-msg-a="socket() 只创建对象、装好 ops。" data-msg-b="对。socket() 后是未连接状态；connect/listen 才推进 TCP 状态机。"></div>
+    </div>
+
+    <div class="gate">
+      <div class="gate-step">
+        <div class="gate-step-head"><span class="step-num">1</span><h4>检查理解</h4><span class="gate-time">≈2 分钟 · 不计分</span></div>
+
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">1.</span><code>socket()</code> 最核心的产物是：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="s3-1-q1" value="a"><span><span class="opt-key">A</span> 一个已连接的 TCP 连接<span class="opt-why">连接由 connect 推进。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="s3-1-q1" value="b"><span><span class="opt-key">B</span> 一个 socket 对象 + 协议 ops<span class="opt-why">对。对象、family、ops 装好，状态未连接。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="s3-1-q1" value="c"><span><span class="opt-key">C</span> 一个 sk_buff<span class="opt-why">skb 是发送时才分配。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>“创建对象”与“建立连接”是两件事。</p>
+        </fieldset>
+
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">2.</span><code>sock-&gt;ops</code> 的作用是：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="s3-1-q2" value="a"><span><span class="opt-key">A</span> 保存 TCP 序列号<span class="opt-why">序列号在 sock/tcp_sock。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="s3-1-q2" value="b"><span><span class="opt-key">B</span> 按协议族分派 sendmsg/connect 等操作<span class="opt-why">对。socket 层只调 ops，不关心 TCP/UDP 细节。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="s3-1-q2" value="c"><span><span class="opt-key">C</span> 记录路由<span class="opt-why">路由在 FIB/rtable。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>方法表是“协议族插件”的关键。</p>
+        </fieldset>
+
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">3.</span>AF_INET 的 <code>create</code> 回调注册在：</legend>
+          <label class="opt" data-correct="1"><input type="radio" name="s3-1-q3" value="a"><span><span class="opt-key">A</span> <code>net_families[]</code> 的 <code>net_proto_family</code><span class="opt-why">对。__sock_create 按 family 查这张表。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="s3-1-q3" value="b"><span><span class="opt-key">B</span> <code>proto_ops</code> 的 sendmsg<span class="opt-why">那是连接后的数据路径。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="s3-1-q3" value="c"><span><span class="opt-key">C</span> skb 的 destructor<span class="opt-why">与创建 socket 无关。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>两条表：family 表负责创建，proto_ops 负责操作。</p>
+        </fieldset>
+      </div>
+
+      <div class="gate-step">
+        <div class="gate-step-head"><span class="step-num">2</span><h4>用自己的话解释</h4><span class="gate-time">≈3 分钟 · 本地保存</span></div>
+        <div class="sa" data-sa="s3-1">
+          <label class="sa-label" for="sa-s3-1">用 3–4 句话说明 <code>socket()</code> 的调用链：从系统调用到 <code>inet_create</code>，再到 <code>sock-&gt;ops</code>。为什么这一层不直接调用 TCP 函数？</label>
+          <textarea id="sa-s3-1" rows="4" placeholder="__sys_socket → __sock_create → family->create……"></textarea>
+          <div class="sa-meta"><span class="wordcount">0 字</span><span class="save-status" aria-live="polite"></span><span class="spacer"></span><button type="button" class="textbtn" data-clear>清空</button></div>
+          <div class="sa-actions">
+            <button type="button" class="btn secondary small" data-reveal>查看参考答案</button>
+            <button type="button" class="textbtn" data-stuck>我卡住了</button>
+            <button type="button" class="textbtn" data-copy-mine>复制我的答案</button>
+          </div>
+          <div class="model" hidden>
+            <span class="model-kicker">参考答案</span>
+            <p><code>__sys_socket</code> 分配 file 与 socket，然后 <code>__sock_create</code> 按 family 查 <code>net_families[]</code>，调用 AF_INET 的 <code>inet_create</code>。<code>inet_create</code> 在 <code>inetsw</code> 里按 type/protocol 选择协议，分配并初始化 <code>struct sock</code>，最后把 <code>sock-&gt;ops</code> 指向 <code>inet_stream_ops</code> 等。socket 层只依赖 ops 抽象，不直接调用 TCP 函数，因此新增协议族或 MPTCP 不需要改系统调用层。</p>
+          </div>
+          <div class="selfcheck" aria-label="自查">
+            <label><input type="checkbox"> 我写出了 __sock_create → family-&gt;create。</label>
+            <label><input type="checkbox"> 我提到了 inetsw 与 ops 赋值。</label>
+            <label><input type="checkbox"> 我说出了抽象层带来的扩展性。</label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="recap">
+      <h4>本小节可以带走</h4>
+      <ul>
+        <li><code>socket()</code> 创建对象、选择 family、装 ops，不建立连接。</li>
+        <li><code>net_families[]</code> 负责 create，<code>proto_ops</code> 负责后续操作。</li>
+        <li>TCP 状态在 connect/listen 后推进。</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="s3-2" data-title="3.2 sendto：从 fd 到 tcp_sendmsg" data-read="7" data-check="5" data-next="下一节：IP 与路由">
+    <span class="section-label">模块 3 · 小节 2</span>
+    <h3><code>sendto</code>：从 fd 到 <code>tcp_sendmsg</code></h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
+    <figure class="video-block section-video">
+      <video controls preload="metadata" poster="assets/sec-s3-2-poster.jpg" aria-label="本节视频：s3-2">
+        <source src="assets/sec-s3-2.mp4" type="video/mp4">
+        你的浏览器不支持视频标签。
+      </video>
+      <figcaption><span>本节视频 · 看完就能动手</span><span>命令与源码来自 linux-src/</span></figcaption>
+    </figure>
+
+    <div class="screen">
+      <p><code>sendto</code> 的第一件事不是发包，而是把用户 buffer 变成内核可访问的 <code>msghdr</code>；然后通过 fd 找 socket，再走 ops。地址只在 <code>msg_name</code> 里出现。</p>
+      <figure class="diagram">
+        <div class="diagram-note">sendto 的分层</div>
+        <div class="mermaid">
+sequenceDiagram
+  participant U as 用户
+  participant S as __sys_sendto
+  participant K as sock_sendmsg
+  participant O as proto_ops
+  participant T as tcp_sendmsg
+  U->>S: sendto(fd, buf, len, addr)
+  S->>S: import_ubuf + fdget
+  S->>S: sock_from_file
+  S->>K: msghdr
+  K->>O: sock->ops->sendmsg
+  O->>T: tcp_sendmsg
+        </div>
+        <figcaption>地址（sockaddr）先被拷进内核，再作为 msghdr 的一部分传下去。</figcaption>
+        <details><summary>图源</summary><pre>sequenceDiagram
+  U->>__sys_sendto: sendto
+  __sys_sendto->>sock_sendmsg: msghdr
+  sock_sendmsg->>proto_ops: sendmsg
+  proto_ops->>tcp_sendmsg</pre></details>
+      </figure>
+    </div>
+
+    <div class="screen">
+      <h4>关键代码</h4>
+      <div class="code">
+        <div class="code-head"><span>net/socket.c:2248 · __sys_sendto（节选）</span></div>
+        <pre><code>int __sys_sendto(int fd, void __user *buff, size_t len, unsigned int flags,
+		 struct sockaddr __user *addr,  int addr_len)
+{
+	...
+	err = import_ubuf(ITER_SOURCE, buff, len, &amp;msg.msg_iter);
+	...
+	CLASS(fd, f)(fd);
+	if (fd_empty(f))
+		return -EBADF;
+	sock = sock_from_file(fd_file(f));
+	if (unlikely(!sock))
+		return -ENOTSOCK;
+	...
+	if (addr) {
+		err = move_addr_to_kernel(addr, addr_len, &amp;address);
+		...
+		msg.msg_name = (struct sockaddr *)&amp;address;
+		msg.msg_namelen = addr_len;
+	}
+	...
+	return __sock_sendmsg(sock, &amp;msg);
+}</code></pre>
+      </div>
+      <div class="code">
+        <div class="code-head"><span>net/socket.c:798 · sock_sendmsg_nosec（节选）</span></div>
+        <pre><code>static inline int sock_sendmsg_nosec(struct socket *sock, struct msghdr *msg)
+{
+	int ret = INDIRECT_CALL_INET(READ_ONCE(sock-&gt;ops)-&gt;sendmsg,
+				     inet6_sendmsg,
+				     inet_sendmsg, sock, msg,
+				     msg_data_left(msg));
+	...
+	return ret;
+}</code></pre>
+      </div>
+      <p>到 <code>tcp_sendmsg</code> 后，数据会被组织成 skb，推进发送队列；真正的 IP 头、路由与 qdisc 在更下面。注意 <code>tcp_sendmsg</code> 先 <code>lock_sock</code>，再进入 <code>tcp_sendmsg_locked</code>。</p>
+    </div>
+
+    <div class="micro" data-micro data-good="b">
+      <p class="micro-q"><span class="tag">定位</span><code>sendto</code> 里的 <code>sockaddr</code> 在进入协议层之前，最关键的一步是：</p>
+      <div class="micro-actions">
+        <button data-pick="a">直接解引用用户地址</button>
+        <button data-pick="b">move_addr_to_kernel 拷进内核</button>
+        <button data-pick="c">写入 skb 头部</button>
+      </div>
+      <div class="micro-result" hidden data-msg-a="用户地址不能直接解引用。" data-msg-b="对。sockaddr 先拷到内核栈上的 sockaddr_storage，再作为 msg_name 传下去。"></div>
+    </div>
+
+    <figure class="diagram">
+      <div class="diagram-note">sendto 的对象跳转</div>
+      <div class="mermaid">
+flowchart LR
+  FD["fd"] --> F["file"]
+  F --> S["socket"]
+  S --> O["sock->ops"]
+  O --> I["inet_sendmsg"]
+  I --> T["tcp_sendmsg"]
+      </div>
+      <figcaption>每一跳都只依赖上一层的抽象：fd 表、file、socket、ops、协议实现。</figcaption>
+      <details><summary>图源</summary><pre>flowchart LR
+  fd --> file --> socket --> ops --> inet_sendmsg --> tcp_sendmsg</pre></details>
+    </figure>
+    <div class="gate">
+      <div class="gate-step">
+        <div class="gate-step-head"><span class="step-num">1</span><h4>检查理解</h4><span class="gate-time">≈2 分钟 · 不计分</span></div>
+
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">1.</span><code>__sys_sendto</code> 通过什么找到 socket？</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="s3-2-q1" value="a"><span><span class="opt-key">A</span> 全局 socket 哈希表<span class="opt-why">当前进程的 fd 表才是入口。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="s3-2-q1" value="b"><span><span class="opt-key">B</span> fd → struct file → sock_from_file<span class="opt-why">对。fdget 拿 file，再从 file 的 private_data 找 socket。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="s3-2-q1" value="c"><span><span class="opt-key">C</span> 扫描所有 net_device<span class="opt-why">设备与 fd 无关。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>fd 表是每个进程的地址空间到内核对象的桥。</p>
+        </fieldset>
+
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">2.</span>UDP 与 TCP 的 <code>sendmsg</code> 分派发生在：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="s3-2-q2" value="a"><span><span class="opt-key">A</span> 系统调用入口直接 if/else<span class="opt-why">入口不关心协议。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="s3-2-q2" value="b"><span><span class="opt-key">B</span> <code>sock-&gt;ops-&gt;sendmsg</code><span class="opt-why">对。socket 层通过 ops 分派，inet_sendmsg 再按 sk_prot 走 TCP/UDP。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="s3-2-q2" value="c"><span><span class="opt-key">C</span> 驱动里的 ndo_start_xmit<span class="opt-why">那是更下层。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>一层方法表，一层协议实现；网络栈的可扩展性来自这里。</p>
+        </fieldset>
+
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">3.</span><code>sendto</code> 返回成功，说明：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="s3-2-q3" value="a"><span><span class="opt-key">A</span> 对方一定收到了<span class="opt-why">TCP 只保证本地协议栈接受；UDP 更不保证。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="s3-2-q3" value="b"><span><span class="opt-key">B</span> 数据已交给协议层（或进入发送队列）<span class="opt-why">对。成功是“本地接受”，不是端到端确认。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="s3-2-q3" value="c"><span><span class="opt-key">C</span> 网卡已经发出<span class="opt-why">qdisc/驱动还可能排队或丢弃。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>理解“成功”的边界，才能理解后面的队列、qdisc 与错误上报。</p>
+        </fieldset>
+      </div>
+
+      <div class="gate-step">
+        <div class="gate-step-head"><span class="step-num">2</span><h4>用自己的话解释</h4><span class="gate-time">≈3 分钟 · 本地保存</span></div>
+        <div class="sa" data-sa="s3-2">
+          <label class="sa-label" for="sa-s3-2">用 3–4 句话描述 <code>sendto</code> 从用户 buffer 到 <code>tcp_sendmsg</code> 的路径，并指出 sockaddr 在哪一步被拷贝、为什么必须拷贝。</label>
+          <textarea id="sa-s3-2" rows="4" placeholder="import_ubuf → fdget → sock_from_file → ops → tcp_sendmsg……"></textarea>
+          <div class="sa-meta"><span class="wordcount">0 字</span><span class="save-status" aria-live="polite"></span><span class="spacer"></span><button type="button" class="textbtn" data-clear>清空</button></div>
+          <div class="sa-actions">
+            <button type="button" class="btn secondary small" data-reveal>查看参考答案</button>
+            <button type="button" class="textbtn" data-stuck>我卡住了</button>
+            <button type="button" class="textbtn" data-copy-mine>复制我的答案</button>
+          </div>
+          <div class="model" hidden>
+            <span class="model-kicker">参考答案</span>
+            <p><code>__sys_sendto</code> 先用 <code>import_ubuf</code> 把用户 buffer 变成 iov_iter，再用 fdget 拿 file、<code>sock_from_file</code> 拿 socket。若有目标地址，<code>move_addr_to_kernel</code> 把用户态 sockaddr 拷到内核栈上的 <code>sockaddr_storage</code>，避免后续直接解引用用户指针。随后 <code>sock_sendmsg</code> 调 <code>sock-&gt;ops-&gt;sendmsg</code>，AF_INET 最终进入 <code>tcp_sendmsg</code>，由它组织 skb 并推进发送队列。</p>
+          </div>
+          <div class="selfcheck" aria-label="自查">
+            <label><input type="checkbox"> 我按 fd → file → socket 写了查找。</label>
+            <label><input type="checkbox"> 我指出了 sockaddr 拷贝到内核。</label>
+            <label><input type="checkbox"> 我提到了 ops-&gt;sendmsg 与 tcp_sendmsg。</label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="recap">
+      <h4>本小节可以带走</h4>
+      <ul>
+        <li>sendto 先 import 用户 buffer、查 fd、拷 sockaddr。</li>
+        <li>协议分派在 <code>sock-&gt;ops-&gt;sendmsg</code>。</li>
+        <li>成功只代表本地协议栈接受，不代表对方收到。</li>
+      </ul>
+    </div>
+  </section>
+
+  <div class="lab" data-lab="lab-netlink" id="lab-netlink">
+    <div class="lab-head">
+      <div class="lab-kicker">实验 3 · 25 分钟 · 难度：中高 · 需要 Lima VM</div>
+      <h3>用 netlink 列出接口地址</h3>
+      <p class="lab-sub">不调用 <code>ip addr</code>。自己发 RTM_GETADDR，解析 ifaddrmsg 与 IFA_LOCAL。</p>
+    </div>
+    <div class="lab-body">
+      <p class="lab-broken"><span class="label">当前状态</span><code>ifaddr.c</code> 发了一个空请求，<code>recv</code> 后什么也不解析；运行没有输出。</p>
+
+      <div class="lab-grid">
+        <div>
+          <h4>任务</h4>
+          <ol class="task-list">
+            <li>打开 <code>AF_NETLINK / NETLINK_ROUTE</code>，bind。</li>
+            <li>构造 <code>RTM_GETADDR</code> + <code>NLM_F_DUMP</code> 请求。</li>
+            <li>循环 recv，处理 <code>NLMSG_DONE</code>。</li>
+            <li>解析 <code>ifaddrmsg</code> 与 <code>IFA_LOCAL/IFA_ADDRESS</code>，打印接口名 + 地址。</li>
+          </ol>
+          <h4>交付物</h4>
+          <div class="pathline"><code>linux-course/work/lab-netlink/ifaddr.c</code><button class="copy" data-copy="linux-course/work/lab-netlink/ifaddr.c">复制路径</button></div>
+          <h4>预期</h4>
+          <pre class="term"><span class="p">$</span> ./ifaddr
+lo 127.0.0.1
+eth0 192.168.5.15
+...</pre>
+        </div>
+        <div>
+          <h4>只读预览</h4>
+          <div class="lab-preview"><pre>req.nlh.nlmsg_len =
+    NLMSG_LENGTH(sizeof(struct ifaddrmsg));
+/* TODO 1: type/flags/family */
+
+for (;;) {
+    int len = recv(fd, buf, sizeof buf, 0);
+    for (nlh = ...; NLMSG_OK(nlh, len); ...) {
+        /* TODO 2: RTM_NEWADDR + IFA_LOCAL */
+    }
+}</pre></div>
+          <div class="lab-actions">
+            <button type="button" class="btn" data-check>检查我的实验</button>
+            <span class="lab-status">在 Lima VM 里编译运行</span>
+          </div>
+          <div class="lab-results" hidden></div>
+        </div>
+      </div>
+
+      <details class="hints">
+        <summary>三级提示</summary>
+        <div class="hint"><b>提示 1 · 请求</b><code>nlmsg_type=RTM_GETADDR</code>，<code>nlmsg_flags=NLM_F_REQUEST|NLM_F_DUMP</code>，<code>ifa_family=AF_UNSPEC</code>。</div>
+        <div class="hint"><b>提示 2 · 解析</b><code>ifa = NLMSG_DATA(nlh)</code>；<code>alen = nlh-&gt;nlmsg_len - NLMSG_LENGTH(sizeof(*ifa))</code>。</div>
+        <div class="hint"><b>提示 3 · 地址</b>遍历 <code>IFA_RTA(ifa)</code>，取 <code>IFA_LOCAL</code>（没有则 <code>IFA_ADDRESS</code>），用 <code>inet_ntop</code>；接口名用 <code>if_indextoname</code>。</div>
+      </details>
+
+      <p class="lab-foot">终端检查：<code>node linux-course/check.mjs lab-netlink</code>；恢复骨架：<code>node linux-course/lab.mjs restore lab-netlink</code>。</p>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="module" id="m4" data-num="4" data-title="IP、路由与邻居">
+<div class="wrap">
+  <header class="module-head">
+    <div class="module-num">04</div>
+    <h2>IP、路由与邻居</h2>
+    <p class="lede">到了网络层，地址不再只是“目标的 4 个字节”。要选出口、查下一跳、解析 MAC，最后才把包交给 qdisc。这里也是“地址最重要”的地方。</p>
+  </header>
+
+  <section class="section" id="s4-1" data-title="4.1 IPv4 头与地址" data-read="7" data-check="5" data-next="下一节：路由与邻居">
+    <span class="section-label">模块 4 · 小节 1</span>
+    <h3>IPv4 头与地址</h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
+    <figure class="video-block section-video">
+      <video controls preload="metadata" poster="assets/sec-s4-1-poster.jpg" aria-label="本节视频：s4-1">
+        <source src="assets/sec-s4-1.mp4" type="video/mp4">
+        你的浏览器不支持视频标签。
+      </video>
+      <figcaption><span>本节视频 · 看完就能动手</span><span>命令与源码来自 linux-src/</span></figcaption>
+    </figure>
+
+    <div class="screen">
+      <p>IPv4 头是 20 字节起步的位域结构。版本与 IHL 共用一个字节，长度和偏移都是大端，地址是 <code>__be32</code>。读错任何一位，后面的解析全错。</p>
+      <figure class="diagram">
+        <div class="diagram-note">IPv4 头的前 20 字节</div>
+        <div class="mermaid">
+flowchart LR
+  A["version:4 | ihl:4"] --> B["tos"]
+  B --> C["tot_len"]
+  C --> D["id / frag_off"]
+  D --> E["ttl / protocol"]
+  E --> F["check"]
+  F --> G["saddr / daddr"]
+        </div>
+        <figcaption>协议字段（protocol）决定交给 TCP、UDP 还是 ICMP；地址字段参与路由与校验。</figcaption>
+        <details><summary>图源</summary><pre>flowchart LR
+  ver --> tos --> tot_len --> id --> ttl --> check --> saddr --> daddr</pre></details>
+      </figure>
+      <div class="code">
+        <div class="code-head"><span>include/uapi/linux/ip.h:87 · struct iphdr</span></div>
+        <pre><code>struct iphdr {
+#if defined(__LITTLE_ENDIAN_BITFIELD)
+	__u8	ihl:4,
+		version:4;
+#elif defined (__BIG_ENDIAN_BITFIELD)
+	__u8	version:4,
+  		ihl:4;
+#endif
+	__u8	tos;
+	__be16	tot_len;
+	__be16	id;
+	__be16	frag_off;
+	__u8	ttl;
+	__u8	protocol;
+	__sum16	check;
+	__be32	saddr;
+	__be32	daddr;
+};</code></pre>
+      </div>
+    </div>
+
+    <div class="micro" data-micro data-good="b">
+      <p class="micro-q"><span class="tag">预测</span>IPv4 头的 <code>ihl</code> 值是 5，表示头部长度是多少字节？</p>
+      <div class="micro-actions">
+        <button data-pick="a">5</button>
+        <button data-pick="b">20</button>
+        <button data-pick="c">40</button>
+      </div>
+      <div class="micro-result" hidden data-msg-a="ihl 的单位是 4 字节。" data-msg-b="对。5 × 4 = 20 字节，没有选项。"></div>
+    </div>
+
+    <div class="screen">
+      <h4>校验和与分片</h4>
+      <p>IPv4 头有 16 位校验和，只覆盖头部，不覆盖数据；TCP/UDP 有自己的校验和。分片由 <code>frag_off</code> 的 MF/DF 位与偏移表示，重组在 <code>ip_defrag</code>。</p>
+      <p>发送时，<code>ip_send_skb</code> 最终走 <code>ip_local_out</code> → <code>dst_output</code>。在本地出包路径上，路由结果 <code>struct rtable</code> 提供了输出设备与下一跳。</p>
+      <div class="callout">
+        <span class="label">读字段的顺序</span>
+        <p>先看 <code>version/ihl</code> 确认是 IPv4 与头长，再看 <code>protocol</code> 决定上送哪个协议，最后才读地址。顺序错了，后面全是越界。</p>
+      </div>
+    </div>
+
+    <div class="gate">
+      <div class="gate-step">
+        <div class="gate-step-head"><span class="step-num">1</span><h4>检查理解</h4><span class="gate-time">≈2 分钟 · 不计分</span></div>
+
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">1.</span>IPv4 的 <code>ihl</code> 单位是：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="s4-1-q1" value="a"><span><span class="opt-key">A</span> 1 字节<span class="opt-why">最小值 5 就成 5 字节，不对。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="s4-1-q1" value="b"><span><span class="opt-key">B</span> 4 字节<span class="opt-why">对。ihl=5 → 20 字节。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="s4-1-q1" value="c"><span><span class="opt-key">C</span> 8 字节<span class="opt-why">不是 8。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>读 IP 头第一步：<code>ihl * 4</code> 得到头长。</p>
+        </fieldset>
+
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">2.</span>IPv4 头校验和覆盖：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="s4-1-q2" value="a"><span><span class="opt-key">A</span> 头 + 数据<span class="opt-why">IPv4 头校验和只覆盖头。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="s4-1-q2" value="b"><span><span class="opt-key">B</span> 仅头部<span class="opt-why">对。传输层有自己的校验和。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="s4-1-q2" value="c"><span><span class="opt-key">C</span> 仅地址<span class="opt-why">还包括其他头字段。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>这也是为什么 NAT 改地址后必须重算头校验和。</p>
+        </fieldset>
+
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">3.</span>分片重组的字段主要在：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="s4-1-q3" value="a"><span><span class="opt-key">A</span> <code>ihl</code><span class="opt-why">ihl 是头长。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="s4-1-q3" value="b"><span><span class="opt-key">B</span> <code>frag_off</code> 的 MF/DF 与偏移<span class="opt-why">对。MF=更多分片，DF=禁止分片，低位是偏移。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="s4-1-q3" value="c"><span><span class="opt-key">C</span> <code>tos</code><span class="opt-why">tos 是服务类型。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>分片是 IPv4 的历史包袱，IPv6 改成端到端分片。</p>
+        </fieldset>
+      </div>
+
+      <div class="gate-step">
+        <div class="gate-step-head"><span class="step-num">2</span><h4>用自己的话解释</h4><span class="gate-time">≈3 分钟 · 本地保存</span></div>
+        <div class="sa" data-sa="s4-1">
+          <label class="sa-label" for="sa-s4-1">用 3–4 句话解释：解析 IPv4 头时，为什么要先读 <code>version/ihl</code>，再读 <code>protocol</code>，最后才读地址？如果顺序反过来会有什么风险？</label>
+          <textarea id="sa-s4-1" rows="4" placeholder="从边界检查与分派顺序想……"></textarea>
+          <div class="sa-meta"><span class="wordcount">0 字</span><span class="save-status" aria-live="polite"></span><span class="spacer"></span><button type="button" class="textbtn" data-clear>清空</button></div>
+          <div class="sa-actions">
+            <button type="button" class="btn secondary small" data-reveal>查看参考答案</button>
+            <button type="button" class="textbtn" data-stuck>我卡住了</button>
+            <button type="button" class="textbtn" data-copy-mine>复制我的答案</button>
+          </div>
+          <div class="model" hidden>
+            <span class="model-kicker">参考答案</span>
+            <p><code>version/ihl</code> 决定这是不是 IPv4 以及头部实际长度，必须先确认，否则后续字段的偏移都不可信。确认头长后才能安全读取 <code>protocol</code>，由它决定把 payload 交给 TCP、UDP、ICMP 还是其他处理函数。地址字段用于路由与校验，读它的前提是头部边界已经验证；顺序反过来容易在恶意/损坏包上越界。</p>
+          </div>
+          <div class="selfcheck" aria-label="自查">
+            <label><input type="checkbox"> 我说明了 ihl 决定头长与偏移。</label>
+            <label><input type="checkbox"> 我说明了 protocol 决定上送协议。</label>
+            <label><input type="checkbox"> 我指出了越界/损坏包风险。</label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="recap">
+      <h4>本小节可以带走</h4>
+      <ul>
+        <li>IPv4 头：version/ihl、tot_len、protocol、saddr/daddr。</li>
+        <li>ihl 以 4 字节为单位；头校验和只覆盖头。</li>
+        <li>分片看 frag_off 的 MF/DF 与偏移。</li>
+      </ul>
+    </div>
+  </section>
+
+  <div class="lab" data-lab="lab-lpm" id="lab-lpm">
+    <div class="lab-head">
+      <div class="lab-kicker">实验 4 · 25 分钟 · 难度：中</div>
+      <h3>实现最长前缀匹配</h3>
+      <p class="lab-sub">路由表的核心不是“相等”，而是“在匹配的前缀里选最长”。自己实现一次，再看 FIB 会轻松很多。</p>
+    </div>
+    <div class="lab-body">
+      <p class="lab-broken"><span class="label">当前状态</span><code>lpm.c</code> 的 add/lookup 都返回 -1；路由表永远为空。</p>
+
+      <div class="lab-grid">
+        <div>
+          <h4>任务</h4>
+          <ol class="task-list">
+            <li>实现 <code>kc_fib_init</code> / <code>kc_fib_add</code>。</li>
+            <li>实现 <code>kc_fib_lookup</code>，返回最长前缀的下一跳。</li>
+            <li>支持 /0 默认路由与 /32 主机路由。</li>
+            <li>拒绝非法前缀长度与表满。</li>
+          </ol>
+          <h4>交付物</h4>
+          <div class="pathline"><code>linux-course/work/lab-lpm/lpm.c</code><button class="copy" data-copy="linux-course/work/lab-lpm/lpm.c">复制路径</button></div>
+        </div>
+        <div>
+          <h4>只读预览</h4>
+          <div class="lab-preview"><pre>int kc_fib_lookup(const struct kc_fib *fib,
+                  uint32_t addr,
+                  uint32_t *nexthop)
+{
+	/* TODO: 遍历路由，选 len 最大的匹配 */
+	return -1;
+}</pre></div>
+          <div class="lab-actions">
+            <button type="button" class="btn" data-check>检查我的实验</button>
+            <span class="lab-status">clang 编译 + 单测</span>
+          </div>
+          <div class="lab-results" hidden></div>
+        </div>
+      </div>
+
+      <details class="hints">
+        <summary>三级提示</summary>
+        <div class="hint"><b>提示 1 · 掩码</b><code>len==0 → 0</code>，<code>len==32 → 0xffffffff</code>，其余 <code>0xffffffff &lt;&lt; (32-len)</code>。</div>
+        <div class="hint"><b>提示 2 · 字节序</b>先 <code>ntohl</code> 再按位与；存回去时保持网络字节序。</div>
+        <div class="hint"><b>提示 3 · 最长</b>用 <code>best_len</code> 记录当前最长；只有严格更长才替换。</div>
+      </details>
+
+      <p class="lab-foot">终端检查：<code>node linux-course/check.mjs lab-lpm</code>；恢复骨架：<code>node linux-course/lab.mjs restore lab-lpm</code>。</p>
+    </div>
+  </div>
+
+  <section class="section" id="s4-2" data-title="4.2 路由与邻居" data-read="7" data-check="5" data-next="下一节：sk_buff">
+    <span class="section-label">模块 4 · 小节 2</span>
+    <h3>路由与邻居</h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
+    <figure class="video-block section-video">
+      <video controls preload="metadata" poster="assets/sec-s4-2-poster.jpg" aria-label="本节视频：s4-2">
+        <source src="assets/sec-s4-2.mp4" type="video/mp4">
+        你的浏览器不支持视频标签。
+      </video>
+      <figcaption><span>本节视频 · 看完就能动手</span><span>命令与源码来自 linux-src/</span></figcaption>
+    </figure>
+
+    <div class="screen">
+      <p>发送一个包，先回答两个问题：走哪个接口（路由），下一跳的 MAC 是什么（邻居）。前者查 FIB，后者查 ARP/NDISC 缓存；缓存没有就发 ARP/NS 请求。</p>
+      <figure class="diagram">
+        <div class="diagram-note">从目的地址到下一跳</div>
+        <div class="mermaid">
+flowchart TB
+  D["目的 IP"] --> F["fib_lookup<br/>最长前缀"]
+  F --> R["rtable<br/>dev + nexthop"]
+  R --> N{"邻居缓存命中？"}
+  N -->|"是"| M["MAC"]
+  N -->|"否"| A["ARP / NS 请求"]
+  A --> M
+  M --> Q["qdisc → ndo_start_xmit"]
+        </div>
+        <figcaption>路由选“从哪出去”，邻居解析“交给哪个 MAC”；两者都缓存。</figcaption>
+        <details><summary>图源</summary><pre>flowchart TB
+  dst --> fib_lookup --> rtable --> neigh? --> arp/nd --> mac --> qdisc</pre></details>
+      </figure>
+      <div class="code">
+        <div class="code-head"><span>net/ipv4/route.c:2967 · ip_route_output_flow</span></div>
+        <pre><code>struct rtable *ip_route_output_flow(struct net *net, struct flowi4 *flp4,
+				    const struct sock *sk)
+{
+	struct rtable *rt = __ip_route_output_key(net, flp4);
+
+	if (IS_ERR(rt))
+		return rt;
+	...
+	return rt;
+}</code></pre>
+      </div>
+      <p><code>fib_lookup</code> 在 <code>net/ipv4/fib_trie.c</code>，返回 <code>fib_result</code>（前缀、下一跳、类型）。<code>rtable</code> 把结果缓存起来，避免每个包都走完整查找。</p>
+    </div>
+
+    <div class="micro" data-micro data-good="b">
+      <p class="micro-q"><span class="tag">预测</span>同一子网内两台主机第一次通信，发送前通常先发生什么？</p>
+      <div class="micro-actions">
+        <button data-pick="a">TCP 三次握手</button>
+        <button data-pick="b">ARP 请求解析 MAC</button>
+        <button data-pick="c">DNS 查询</button>
+      </div>
+      <div class="micro-result" hidden data-msg-a="握手在 IP 包能发出去之后。" data-msg-b="对。没有邻居缓存就无法封装以太网帧，先 ARP/ND。"></div>
+    </div>
+
+    <figure class="diagram">
+      <div class="diagram-note">ARP 的一次往返</div>
+      <div class="mermaid">
+sequenceDiagram
+  participant H as 主机 A
+  participant N as 同链路主机 B
+  H->>N: who-has 10.0.0.2 tell 10.0.0.1
+  N-->>H: 10.0.0.2 is-at 02:42:ac:11:00:02
+  Note over H: 写入 neighbour 表
+      </div>
+      <figcaption>广播询问、单播回答；结果进入邻居表，后续包直接封装，不再询问。</figcaption>
+      <details><summary>图源</summary><pre>sequenceDiagram
+  H->>N: who-has
+  N-->>H: is-at
+  Note over H: neigh cache</pre></details>
+    </figure>
+    <div class="gate">
+      <div class="gate-step">
+        <div class="gate-step-head"><span class="step-num">1</span><h4>检查理解</h4><span class="gate-time">≈2 分钟 · 不计分</span></div>
+
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">1.</span><code>fib_lookup</code> 返回的结果不包括：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="s4-2-q1" value="a"><span><span class="opt-key">A</span> 下一跳地址<span class="opt-why">fib_result 包含 nexthop。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="s4-2-q1" value="b"><span><span class="opt-key">B</span> 输出设备<span class="opt-why">结果里能拿到 dev。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="s4-2-q1" value="c"><span><span class="opt-key">C</span> 对方的 MAC 地址<span class="opt-why">对。MAC 由邻居子系统（ARP/ND）解析，不在 FIB 结果里。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>路由与邻居是两个缓存、两个问题。</p>
+        </fieldset>
+
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">2.</span>IPv6 中替代 ARP 的机制是：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="s4-2-q2" value="a"><span><span class="opt-key">A</span> DHCPv6<span class="opt-why">DHCPv6 分配地址，不做链路层解析。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="s4-2-q2" value="b"><span><span class="opt-key">B</span> NDISC（邻居发现）<span class="opt-why">对。NS/NA 报文完成 IPv6 到 MAC 的解析。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="s4-2-q2" value="c"><span><span class="opt-key">C</span> DNS64<span class="opt-why">与链路解析无关。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>IPv6 用 ICMPv6 承载邻居发现。</p>
+        </fieldset>
+
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">3.</span>路由缓存（rtable）的主要作用是：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="s4-2-q3" value="a"><span><span class="opt-key">A</span> 替代 FIB<span class="opt-why">FIB 仍是源，缓存只是加速。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="s4-2-q3" value="b"><span><span class="opt-key">B</span> 缓存查找结果，避免每包重走 trie<span class="opt-why">对。流/目的缓存命中后直接拿 dev 与下一跳。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="s4-2-q3" value="c"><span><span class="opt-key">C</span> 保存 ARP 表<span class="opt-why">ARP 在 neighbour 表。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>缓存失效与路由变更通知是这里的难点。</p>
+        </fieldset>
+      </div>
+
+      <div class="gate-step">
+        <div class="gate-step-head"><span class="step-num">2</span><h4>用自己的话解释</h4><span class="gate-time">≈3 分钟 · 本地保存</span></div>
+        <div class="sa" data-sa="s4-2">
+          <label class="sa-label" for="sa-s4-2">用 3–4 句话说明：一个包从“目的 IP”到“能交给驱动”，路由与邻居各解决了什么问题？为什么两者都要缓存？</label>
+          <textarea id="sa-s4-2" rows="4" placeholder="FIB 选出口，ARP/ND 选 MAC……"></textarea>
+          <div class="sa-meta"><span class="wordcount">0 字</span><span class="save-status" aria-live="polite"></span><span class="spacer"></span><button type="button" class="textbtn" data-clear>清空</button></div>
+          <div class="sa-actions">
+            <button type="button" class="btn secondary small" data-reveal>查看参考答案</button>
+            <button type="button" class="textbtn" data-stuck>我卡住了</button>
+            <button type="button" class="textbtn" data-copy-mine>复制我的答案</button>
+          </div>
+          <div class="model" hidden>
+            <span class="model-kicker">参考答案</span>
+            <p>路由解决“从哪个接口出去、下一跳是谁”，由 FIB 的最长前缀匹配给出，并缓存成 rtable。邻居解决“下一跳的链路层地址是什么”，由 ARP（IPv4）或 NDISC（IPv6）解析，结果放进 neighbour 表。两者都缓存是因为查找分别涉及 trie 遍历和网络往返，不能每个包都做；缓存失效、路由变更和邻居过期是正确性的关键。</p>
+          </div>
+          <div class="selfcheck" aria-label="自查">
+            <label><input type="checkbox"> 我区分了路由与邻居的问题。</label>
+            <label><input type="checkbox"> 我提到了 FIB 最长前缀与 rtable。</label>
+            <label><input type="checkbox"> 我说明了缓存原因与失效风险。</label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="recap">
+      <h4>本小节可以带走</h4>
+      <ul>
+        <li>FIB 选出口/下一跳，邻居表选 MAC。</li>
+        <li><code>ip_route_output_flow</code> 把结果缓存为 rtable。</li>
+        <li>ARP/NDISC 是 IP 与链路层之间的解析。</li>
+      </ul>
+    </div>
+  </section>
+
+  <div class="lab" data-lab="lab-netns" id="lab-netns">
+    <div class="lab-head">
+      <div class="lab-kicker">实验 5 · 30 分钟 · 难度：中 · 需要 Lima VM</div>
+      <h3>两个 netns，一对 veth，两组地址</h3>
+      <p class="lab-sub">亲手把“地址、接口、命名空间、链路”连起来，再用 ping 验证。</p>
+    </div>
+    <div class="lab-body">
+      <p class="lab-broken"><span class="label">当前状态</span><code>netns.sh</code> 直接退出 1；没有 namespace、没有 veth、没有地址。</p>
+
+      <div class="lab-grid">
+        <div>
+          <h4>任务</h4>
+          <ol class="task-list">
+            <li>创建 <code>kc-ns1</code> / <code>kc-ns2</code>。</li>
+            <li>创建 veth 对，两端各放进一个 ns。</li>
+            <li>配 <code>10.10.0.1/24</code> 与 <code>10.10.0.2/24</code>，up。</li>
+            <li>从 ns1 ping 10.10.0.2。</li>
+            <li>清理 namespace（veth 会随之消失）。</li>
+          </ol>
+          <h4>交付物</h4>
+          <div class="pathline"><code>linux-course/work/lab-netns/netns.sh</code><button class="copy" data-copy="linux-course/work/lab-netns/netns.sh">复制路径</button></div>
+          <h4>验证</h4>
+          <pre class="term"><span class="p">$</span> sudo sh netns.sh
+64 bytes from 10.10.0.2: ...
+0% packet loss</pre>
+        </div>
+        <div>
+          <h4>只读预览</h4>
+          <div class="lab-preview"><pre>ip netns add kc-ns1
+ip netns add kc-ns2
+
+# TODO: veth pair
+# TODO: 两端放入 ns
+# TODO: 配地址 + up
+# TODO: ping
+# TODO: cleanup</pre></div>
+          <div class="lab-actions">
+            <button type="button" class="btn" data-check>检查我的实验</button>
+            <span class="lab-status">在 Lima VM 内以 root 运行</span>
+          </div>
+          <div class="lab-results" hidden></div>
+        </div>
+      </div>
+
+      <details class="hints">
+        <summary>三级提示</summary>
+        <div class="hint"><b>提示 1 · veth</b><code>ip link add kc-veth1 type veth peer name kc-veth2</code>。</div>
+        <div class="hint"><b>提示 2 · 放进 ns</b><code>ip link set kc-veth1 netns kc-ns1</code>；另一端同理。</div>
+        <div class="hint"><b>提示 3 · 地址</b><code>ip netns exec kc-ns1 ip addr add 10.10.0.1/24 dev kc-veth1</code>，然后 <code>ip link set ... up</code>；最后从 ns1 ping。</div>
+      </details>
+
+      <p class="lab-foot">终端检查：<code>node linux-course/check.mjs lab-netns</code>；恢复骨架：<code>node linux-course/lab.mjs restore lab-netns</code>。</p>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="module" id="m5" data-num="5" data-title="sk_buff 与 TCP">
+<div class="wrap">
+  <header class="module-head">
+    <div class="module-num">05</div>
+    <h2>sk_buff 与 TCP</h2>
+    <p class="lede">sk_buff 是网络栈的“通用货币”。同一块内存，TCP 加头、IP 加头、驱动加 DMA 映射，靠的都是 head/data/tail/end 四个指针。</p>
+  </header>
+
+  <section class="section" id="s5-1" data-title="5.1 sk_buff 的四个指针" data-read="7" data-check="5" data-next="下一节：TCP 与 qdisc">
+    <span class="section-label">模块 5 · 小节 1</span>
+    <h3>sk_buff 的四个指针</h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
+    <figure class="video-block section-video">
+      <video controls preload="metadata" poster="assets/sec-s5-1-poster.jpg" aria-label="本节视频：s5-1">
+        <source src="assets/sec-s5-1.mp4" type="video/mp4">
+        你的浏览器不支持视频标签。
+      </video>
+      <figcaption><span>本节视频 · 看完就能动手</span><span>命令与源码来自 linux-src/</span></figcaption>
+    </figure>
+
+    <div class="screen">
+      <p>不要把 sk_buff 想成“一个包的内存”。它描述的是<strong>一块 buffer 上的一个窗口</strong>：<code>head</code> 是分配起点，<code>data/tail</code> 是当前有效数据，<code>end</code> 是终点。</p>
+      <figure class="diagram">
+        <div class="diagram-note">head / data / tail / end</div>
+        <div class="mermaid">
+flowchart LR
+  H["head"] --> R["headroom"]
+  R --> D["data"]
+  D --> P["payload"]
+  P --> T["tail"]
+  T --> TR["tailroom"]
+  TR --> E["end"]
+        </div>
+        <figcaption>push 往前移 data，pull 往后移 data，put 往后移 tail；都不复制 payload。</figcaption>
+        <details><summary>图源</summary><pre>flowchart LR
+  head --> headroom --> data --> payload --> tail --> tailroom --> end</pre></details>
+      </figure>
+      <div class="code">
+        <div class="code-head"><span>include/linux/skbuff.h:2933 · skb_reserve</span></div>
+        <pre><code>static inline void skb_reserve(struct sk_buff *skb, int len)
+{
+	skb-&gt;data += len;
+	skb-&gt;tail += len;
+}</code></pre>
+      </div>
+      <p><code>skb_reserve</code> 同时移动 data 与 tail，预留头部空间；之后 <code>skb_push</code> 只需把 data 往前挪，不搬运数据。</p>
+    </div>
+
+    <div class="micro" data-micro data-good="b">
+      <p class="micro-q"><span class="tag">预测</span>给一个 skb 预留 16 字节 headroom，然后 push 14 字节以太网头。data 相对 head 的位置是？</p>
+      <div class="micro-actions">
+        <button data-pick="a">0</button>
+        <button data-pick="b">2</button>
+        <button data-pick="c">14</button>
+      </div>
+      <div class="micro-result" hidden data-msg-a="push 会把 data 往回挪 14。" data-msg-b="对。reserve 16 后 data 在 16，push 14 后回到 2。"></div>
+    </div>
+
+    <div class="screen">
+      <h4>常用操作</h4>
+      <ul>
+        <li><code>skb_put</code>：在尾部追加数据，返回旧 tail。</li>
+        <li><code>skb_push</code>：在头部插入，返回新 data。</li>
+        <li><code>skb_pull</code>：从头部移除（消费），返回旧 data。</li>
+        <li><code>skb_trim</code>：缩短尾部。</li>
+      </ul>
+      <p>这些函数都只移动指针并做边界检查；真正昂贵的拷贝发生在 <code>skb_copy</code>、跨 namespace 或用户态拷贝。理解这一点，才能解释“零拷贝”到底省了什么。</p>
+      <div class="callout">
+        <span class="label">skb 的所有权</span>
+        <p>skb 可以用引用计数共享（<code>skb_get</code>），也可以 clone（共享数据、独立元数据）。释放用 <code>kfree_skb</code>；谁分配谁负责，转发路径要特别小心。</p>
+      </div>
+    </div>
+
+    <div class="gate">
+      <div class="gate-step">
+        <div class="gate-step-head"><span class="step-num">1</span><h4>检查理解</h4><span class="gate-time">≈2 分钟 · 不计分</span></div>
+
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">1.</span><code>skb_push</code> 修改的是：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="m5-q1" value="a"><span><span class="opt-key">A</span> tail<span class="opt-why">put 改 tail。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="m5-q1" value="b"><span><span class="opt-key">B</span> data<span class="opt-why">对。data 往前移，给新头腾空间。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="m5-q1" value="c"><span><span class="opt-key">C</span> head<span class="opt-why">head 是分配起点，不动。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>记住：put 动 tail，push/pull 动 data，reserve 同时动两者。</p>
+        </fieldset>
+
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">2.</span>skb 的 headroom 主要用来：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="m5-q1b" value="a"><span><span class="opt-key">A</span> 存 payload<span class="opt-why">payload 在 data..tail。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="m5-q1b" value="b"><span><span class="opt-key">B</span> 给下层协议加头<span class="opt-why">对。TCP/IP/Ethernet 头可以逐层 push，不必重排数据。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="m5-q1b" value="c"><span><span class="opt-key">C</span> 存 DMA 描述符<span class="opt-why">描述符在驱动 ring 里。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>headroom 是“预留的封装空间”。</p>
+        </fieldset>
+
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">3.</span><code>skb_clone</code> 与 <code>skb_copy</code> 的关键区别是：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="m5-q1c" value="a"><span><span class="opt-key">A</span> 都复制数据<span class="opt-why">clone 不复制数据。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="m5-q1c" value="b"><span><span class="opt-key">B</span> clone 共享数据、独立元数据；copy 复制数据<span class="opt-why">对。clone 适合多目的地共享同一份 payload，写入前要小心。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="m5-q1c" value="c"><span><span class="opt-key">C</span> copy 只复制头部<span class="opt-why">copy 复制完整 skb 与数据。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>共享 payload 是性能来源，也是写时复制的风险来源。</p>
+        </fieldset>
+      </div>
+
+      <div class="gate-step">
+        <div class="gate-step-head"><span class="step-num">2</span><h4>用自己的话解释</h4><span class="gate-time">≈3 分钟 · 本地保存</span></div>
+        <div class="sa" data-sa="s5-1">
+          <label class="sa-label" for="sa-s5-1">用 3–4 句话解释：为什么网络栈用“移动指针”而不是“每层复制一份”来加协议头？这带来什么性能收益，又引入什么风险？</label>
+          <textarea id="sa-s5-1" rows="4" placeholder="从 headroom、push/pull、共享与生命周期想……"></textarea>
+          <div class="sa-meta"><span class="wordcount">0 字</span><span class="save-status" aria-live="polite"></span><span class="spacer"></span><button type="button" class="textbtn" data-clear>清空</button></div>
+          <div class="sa-actions">
+            <button type="button" class="btn secondary small" data-reveal>查看参考答案</button>
+            <button type="button" class="textbtn" data-stuck>我卡住了</button>
+            <button type="button" class="textbtn" data-copy-mine>复制我的答案</button>
+          </div>
+          <div class="model" hidden>
+            <span class="model-kicker">参考答案</span>
+            <p>每层协议只需要在 payload 前后加自己的头，如果每层都复制，CPU 与内存带宽会被大量浪费。skb 预留 headroom/tailroom，用 push/pull 移动 data 指针，就能在同一块 buffer 上逐层封装，复制只发生在用户态边界或真正的数据变更。代价是指针边界与 skb 生命周期更复杂：越界、重复释放、clone 后写入共享数据都会造成难以定位的 bug。</p>
+          </div>
+          <div class="selfcheck" aria-label="自查">
+            <label><input type="checkbox"> 我说明了避免复制带来的 CPU/带宽收益。</label>
+            <label><input type="checkbox"> 我提到了 headroom 与 push/pull。</label>
+            <label><input type="checkbox"> 我说出了越界/生命周期风险。</label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="recap">
+      <h4>本小节可以带走</h4>
+      <ul>
+        <li>skb = buffer + head/data/tail/end + 元数据。</li>
+        <li>put 动 tail；push/pull 动 data；reserve 同时动两者。</li>
+        <li>clone 共享数据，copy 复制数据；释放用 kfree_skb。</li>
+      </ul>
+    </div>
+  </section>
+
+  <div class="lab" data-lab="lab-skb" id="lab-skb">
+    <div class="lab-head">
+      <div class="lab-kicker">实验 6 · 30 分钟 · 难度：中高</div>
+      <h3>实现 skb 的指针操作与包头解析</h3>
+      <p class="lab-sub">用一块 128 字节的 buffer，完成 reserve/put/push/pull/trim，再解析 Ethernet + IPv4 + TCP。</p>
+    </div>
+    <div class="lab-body">
+      <p class="lab-broken"><span class="label">当前状态</span><code>skb.c</code> 的函数全部是空实现；解析器永远返回 -1。</p>
+
+      <div class="lab-grid">
+        <div>
+          <h4>任务</h4>
+          <ol class="task-list">
+            <li>实现 init/headroom/tailroom。</li>
+            <li>实现 reserve/put/push/pull/trim，做边界检查。</li>
+            <li>解析 Ethernet → IPv4 → TCP，填 <code>kc_packet_info</code>。</li>
+            <li>处理非 IPv4、非 TCP、头长不足。</li>
+          </ol>
+          <h4>交付物</h4>
+          <div class="pathline"><code>linux-course/work/lab-skb/skb.c</code><button class="copy" data-copy="linux-course/work/lab-skb/skb.c">复制路径</button></div>
+          <h4>约束</h4>
+          <ul>
+            <li>只移动指针，不复制 payload。</li>
+            <li>任何越界返回 NULL 或 -1。</li>
+            <li>地址字段保持网络字节序，端口转成本机字节序。</li>
+          </ul>
+        </div>
+        <div>
+          <h4>只读预览</h4>
+          <div class="lab-preview"><pre>unsigned char *kc_skb_push(struct kc_skb *skb,
+                           unsigned int len)
+{
+	/* TODO: data -= len，检查 headroom */
+	return NULL;
+}
+
+int kc_parse_eth_ip_tcp(const struct kc_skb *skb,
+                        struct kc_packet_info *out)
+{
+	/* TODO: 14 + 20 + 20 */
+	return -1;
+}</pre></div>
+          <div class="lab-actions">
+            <button type="button" class="btn" data-check>检查我的实验</button>
+            <span class="lab-status">clang 编译 + 合成帧单测</span>
+          </div>
+          <div class="lab-results" hidden></div>
+        </div>
+      </div>
+
+      <details class="hints">
+        <summary>三级提示</summary>
+        <div class="hint"><b>提示 1 · 指针</b><code>reserve</code> 同时加 data/tail；<code>push</code> 只减 data；<code>pull</code> 只加 data；<code>put</code> 只加 tail。</div>
+        <div class="hint"><b>提示 2 · 边界</b>push 检查 <code>data-head &gt;= len</code>，put 检查 <code>end-tail &gt;= len</code>，trim 不能短于 0。</div>
+        <div class="hint"><b>提示 3 · 解析</b>EtherType 用大端读 <code>p[12]&lt;&lt;8|p[13]</code>；IP 头长 <code>(p[0]&amp;0xf)*4</code>；TCP 端口在大端转 <code>ntohs</code>。</div>
+      </details>
+
+      <p class="lab-foot">终端检查：<code>node linux-course/check.mjs lab-skb</code>；恢复骨架：<code>node linux-course/lab.mjs restore lab-skb</code>。</p>
+    </div>
+  </div>
+
+  <section class="section" id="s5-2" data-title="5.2 TCP 发送与 qdisc" data-read="7" data-check="5" data-next="下一节：驱动与 NAPI">
+    <span class="section-label">模块 5 · 小节 2</span>
+    <h3>TCP 发送与 qdisc</h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
+    <figure class="video-block section-video">
+      <video controls preload="metadata" poster="assets/sec-s5-2-poster.jpg" aria-label="本节视频：s5-2">
+        <source src="assets/sec-s5-2.mp4" type="video/mp4">
+        你的浏览器不支持视频标签。
+      </video>
+      <figcaption><span>本节视频 · 看完就能动手</span><span>命令与源码来自 linux-src/</span></figcaption>
+    </figure>
+
+    <div class="screen">
+      <p><code>tcp_sendmsg</code> 不是“把数据直接交给网卡”。它把用户数据拷贝进 skb、维护发送队列与序列号，再由 <code>tcp_transmit_skb</code> 加 TCP/IP 头，最后交给 qdisc。</p>
+      <figure class="diagram">
+        <div class="diagram-note">TCP 发送的队列</div>
+        <div class="mermaid">
+flowchart LR
+  A["用户 buffer"] --> B["skb<br/>写入 payload"]
+  B --> C["发送队列<br/>write_queue"]
+  C --> D["tcp_transmit_skb<br/>加 TCP/IP 头"]
+  D --> E["qdisc<br/>排队/整形"]
+  E --> F["ndo_start_xmit"]
+        </div>
+        <figcaption>TCP 保证的是“字节流 + 重传”，不是“立即上网卡”；qdisc 还可能延迟或丢弃。</figcaption>
+        <details><summary>图源</summary><pre>flowchart LR
+  buf --> skb --> write_queue --> tcp_transmit_skb --> qdisc --> ndo_start_xmit</pre></details>
+      </figure>
+    </div>
+
+    <div class="screen">
+      <h4>锁与队列</h4>
+      <p><code>tcp_sendmsg</code> 先 <code>lock_sock</code>，再调用 <code>tcp_sendmsg_locked</code>。这把锁保护的是 socket 的发送状态；同一个 socket 的并发发送会被串行化。</p>
+      <div class="code">
+        <div class="code-head"><span>net/ipv4/tcp.c:1449 · tcp_sendmsg</span></div>
+        <pre><code>int tcp_sendmsg(struct sock *sk, struct msghdr *msg, size_t size)
+{
+	int ret;
+
+	lock_sock(sk);
+	ret = tcp_sendmsg_locked(sk, msg, size);
+	release_sock(sk);
+
+	return ret;
+}</code></pre>
+      </div>
+      <p>每个 skb 进入 <code>sk_write_queue</code>，直到被 ACK 确认才释放。qdisc 位于 IP 层之下，决定“现在发、稍后发、丢哪个”。这就是为什么 <code>sendto</code> 成功不等于网卡已发。</p>
+      <div class="callout">
+        <span class="label">地址与下一跳</span>
+        <p>TCP 不知道 MAC；它只填 IP 地址。路由与邻居在 IP 层完成，qdisc 只看到已经封装好的 skb 和出口设备。</p>
+      </div>
+    </div>
+
+    <div class="micro" data-micro data-good="b">
+      <p class="micro-q"><span class="tag">预测</span>qdisc 队列满时，默认行为可能是：</p>
+      <div class="micro-actions">
+        <button data-pick="a">无限排队</button>
+        <button data-pick="b">丢弃，并可能触发上层重传/背压</button>
+        <button data-pick="c">自动改路由</button>
+      </div>
+      <div class="micro-result" hidden data-msg-a="队列有上限，否则内存会被打爆。" data-msg-b="对。丢包是拥塞信号的一部分；TCP 会重传并降速。"></div>
+    </div>
+
+    <figure class="diagram">
+      <div class="diagram-note">一个 skb 的生命周期</div>
+      <div class="mermaid">
+stateDiagram-v2
+  [*] --> Allocated: alloc_skb
+  Allocated --> Queued: tcp_sendmsg
+  Queued --> InFlight: qdisc / driver
+  InFlight --> Acked: ACK
+  Acked --> [*]: kfree_skb
+  InFlight --> Retransmit: timeout
+  Retransmit --> InFlight
+      </div>
+      <figcaption>发送队列里的 skb 要等 ACK 才能释放；超时会重传，而不是重新分配。</figcaption>
+      <details><summary>图源</summary><pre>stateDiagram-v2
+  Allocated --> Queued --> InFlight
+  InFlight --> Acked --> [*]
+  InFlight --> Retransmit --> InFlight</pre></details>
+    </figure>
+    <div class="gate">
+      <div class="gate-step">
+        <div class="gate-step-head"><span class="step-num">1</span><h4>检查理解</h4><span class="gate-time">≈2 分钟 · 不计分</span></div>
+
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">1.</span><code>tcp_sendmsg</code> 里的 <code>lock_sock</code> 保护：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="m5-q2a" value="a"><span><span class="opt-key">A</span> 全局路由表<span class="opt-why">那是 RCU/其他锁。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="m5-q2a" value="b"><span><span class="opt-key">B</span> 单个 socket 的发送状态<span class="opt-why">对。序列号、发送队列、窗口都在这个 socket 上。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="m5-q2a" value="c"><span><span class="opt-key">C</span> 网卡寄存器<span class="opt-why">驱动自己处理。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>锁的粒度决定了并发发送的扩展性。</p>
+        </fieldset>
+
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">2.</span>qdisc 位于：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="m5-q2b" value="a"><span><span class="opt-key">A</span> TCP 与 IP 之间<span class="opt-why">TCP 先封装，再进 IP。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="m5-q2b" value="b"><span><span class="opt-key">B</span> IP 输出与驱动之间<span class="opt-why">对。qdisc 管的是出口排队与整形。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="m5-q2b" value="c"><span><span class="opt-key">C</span> 应用与 socket 之间<span class="opt-why">应用只看到 fd。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden><code>__dev_queue_xmit</code> 是 qdisc 的入口。</p>
+        </fieldset>
+
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">3.</span>TCP 的 <code>sendto</code> 返回成功，最准确的解释是：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="m5-q2c" value="a"><span><span class="opt-key">A</span> 对端应用已读取<span class="opt-why">那要等 ACK 与应用 read。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="m5-q2c" value="b"><span><span class="opt-key">B</span> 数据已进入本地发送队列/协议栈<span class="opt-why">对。后续可能重传、排队或丢弃。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="m5-q2c" value="c"><span><span class="opt-key">C</span> 网卡已完成 DMA<span class="opt-why">那更晚，且不保证送达。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>“成功”的边界是理解网络性能与错误处理的关键。</p>
+        </fieldset>
+      </div>
+
+      <div class="gate-step">
+        <div class="gate-step-head"><span class="step-num">2</span><h4>用自己的话解释</h4><span class="gate-time">≈3 分钟 · 本地保存</span></div>
+        <div class="sa" data-sa="s5-2">
+          <label class="sa-label" for="sa-s5-2">用 3–4 句话说明 TCP 发送路径中“队列”出现在哪两个位置，各解决什么问题；为什么 <code>sendto</code> 成功不能保证对端收到。</label>
+          <textarea id="sa-s5-2" rows="4" placeholder="socket 发送队列、qdisc、ACK……"></textarea>
+          <div class="sa-meta"><span class="wordcount">0 字</span><span class="save-status" aria-live="polite"></span><span class="spacer"></span><button type="button" class="textbtn" data-clear>清空</button></div>
+          <div class="sa-actions">
+            <button type="button" class="btn secondary small" data-reveal>查看参考答案</button>
+            <button type="button" class="textbtn" data-stuck>我卡住了</button>
+            <button type="button" class="textbtn" data-copy-mine>复制我的答案</button>
+          </div>
+          <div class="model" hidden>
+            <span class="model-kicker">参考答案</span>
+            <p>第一个队列是 TCP 的 <code>sk_write_queue</code>：保存已写入但未被 ACK 的 skb，支持重传与窗口管理。第二个是 IP 输出后的 qdisc：决定何时把包交给驱动，做整形、优先级与丢弃。sendto 返回成功只表示数据被本地协议栈接受（或进入队列），后面还可能排队、被 qdisc 丢弃、重传，甚至对端应用根本没读。端到端确认要等 ACK 与应用层协议。</p>
+          </div>
+          <div class="selfcheck" aria-label="自查">
+            <label><input type="checkbox"> 我指出了 TCP 发送队列与 qdisc 两个队列。</label>
+            <label><input type="checkbox"> 我说明了各自的作用。</label>
+            <label><input type="checkbox"> 我解释了成功 != 对端收到。</label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="recap">
+      <h4>本小节可以带走</h4>
+      <ul>
+        <li><code>tcp_sendmsg</code> 拷贝数据、维护发送队列与序列号。</li>
+        <li>qdisc 在 IP 输出与驱动之间，负责排队/整形/丢弃。</li>
+        <li>sendto 成功只是本地接受，不是端到端送达。</li>
+      </ul>
+    </div>
+  </section>
+</div>
+</section>
+
+<section class="module" id="m6" data-num="6" data-title="驱动、NAPI 与 XDP">
+<div class="wrap">
+  <header class="module-head">
+    <div class="module-num">06</div>
+    <h2>驱动、NAPI 与 XDP</h2>
+    <p class="lede">数据路径的最后一段：包如何从网卡进入内核（NAPI），如何交给协议栈，以及如何在协议栈之前用 XDP 改写/丢弃。</p>
+  </header>
+
+  <section class="section" id="s6-1" data-title="6.1 net_device 与 NAPI" data-read="7" data-check="5" data-next="下一节：XDP">
+    <span class="section-label">模块 6 · 小节 1</span>
+    <h3><code>net_device</code> 与 NAPI</h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
+    <figure class="video-block section-video">
+      <video controls preload="metadata" poster="assets/sec-s6-1-poster.jpg" aria-label="本节视频：s6-1">
+        <source src="assets/sec-s6-1.mp4" type="video/mp4">
+        你的浏览器不支持视频标签。
+      </video>
+      <figcaption><span>本节视频 · 看完就能动手</span><span>命令与源码来自 linux-src/</span></figcaption>
+    </figure>
+
+    <div class="screen">
+      <p><code>net_device</code> 是内核眼里的“一块网卡”。它挂着方法表 <code>net_device_ops</code>、统计、队列和 NAPI 实例。发送走 <code>ndo_start_xmit</code>，接收走 NAPI 轮询。</p>
+      <figure class="diagram">
+        <div class="diagram-note">收包与发包的两条路</div>
+        <div class="mermaid">
+flowchart TB
+  TX["协议栈/qdisc"] --> X["ndo_start_xmit"]
+  X --> DMA["DMA ring"]
+  DMA --> WIRE["网线/对端"]
+  WIRE --> IRQ["中断"]
+  IRQ --> N["napi_schedule"]
+  N --> P["napi_poll"]
+  P --> R["netif_receive_skb"]
+  R --> STACK["IP/TCP"]
+        </div>
+        <figcaption>发包是“推”，收包是“中断触发 + 轮询批量取”；NAPI 用轮询摊薄高负载下的中断成本。</figcaption>
+        <details><summary>图源</summary><pre>flowchart TB
+  qdisc --> ndo_start_xmit --> dma --> wire
+  wire --> irq --> napi_schedule --> napi_poll --> netif_receive_skb</pre></details>
+      </figure>
+      <div class="code">
+        <div class="code-head"><span>include/linux/netdevice.h:1465 · net_device_ops（节选）</span></div>
+        <pre><code>struct net_device_ops {
+	int			(*ndo_init)(struct net_device *dev);
+	void			(*ndo_uninit)(struct net_device *dev);
+	int			(*ndo_open)(struct net_device *dev);
+	int			(*ndo_stop)(struct net_device *dev);
+	netdev_tx_t		(*ndo_start_xmit)(struct sk_buff *skb,
+						  struct net_device *dev);
+	...
+};</code></pre>
+      </div>
+    </div>
+
+    <div class="micro" data-micro data-good="b">
+      <p class="micro-q"><span class="tag">定位</span>驱动收包后，把 skb 交给协议栈的函数通常是：</p>
+      <div class="micro-actions">
+        <button data-pick="a">ndo_start_xmit</button>
+        <button data-pick="b">netif_receive_skb</button>
+        <button data-pick="c">dev_queue_xmit</button>
+      </div>
+      <div class="micro-result" hidden data-msg-a="那是发送入口。" data-msg-b="对。收包路径最终调用 netif_receive_skb，把 skb 送上协议栈。"></div>
+    </div>
+
+    <div class="screen">
+      <h4>NAPI 的取舍</h4>
+      <p>每个包一次中断会在高 PPS 下把 CPU 打满。NAPI 的做法是：第一个包触发中断，随后关闭该队列中断，改用 <code>napi_poll</code> 批量收包，直到预算用完或队列空，再重新开中断。</p>
+      <div class="code">
+        <div class="code-head"><span>net/core/dev.c:7991 · napi_poll</span></div>
+        <pre><code>static int napi_poll(struct napi_struct *n, struct list_head *repoll)
+{
+	bool do_repoll = false;
+	void *have;
+	int work;
+
+	list_del_init(&amp;n-&gt;poll_list);
+	have = netpoll_poll_lock(n);
+
+	work = n-&gt;poll(n, n-&gt;weight);
+
+	if (work &gt;= n-&gt;weight) {
+		do_repoll = true;
+		...
+	}
+	...
+}</code></pre>
+      </div>
+      <p>“预算/权重”决定一次轮询最多处理多少包，避免一个队列长期霸占 CPU。多队列网卡会把不同 flow 散列到不同队列，再分别绑定 CPU。</p>
+    </div>
+
+    <div class="gate">
+      <div class="gate-step">
+        <div class="gate-step-head"><span class="step-num">1</span><h4>检查理解</h4><span class="gate-time">≈2 分钟 · 不计分</span></div>
+
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">1.</span>NAPI 主要解决：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="m6-q1a" value="a"><span><span class="opt-key">A</span> 路由查找慢<span class="opt-why">路由是 FIB 的问题。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="m6-q1a" value="b"><span><span class="opt-key">B</span> 高包速率下每包中断的开销<span class="opt-why">对。中断触发后转轮询批量收包。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="m6-q1a" value="c"><span><span class="opt-key">C</span> TCP 重传<span class="opt-why">重传在 TCP 层。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>NAPI = 中断 + 轮询的混合模式。</p>
+        </fieldset>
+
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">2.</span><code>ndo_start_xmit</code> 的返回值语义是：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="m6-q1b" value="a"><span><span class="opt-key">A</span> 0 表示包已送达对端<span class="opt-why">只表示驱动接受了 skb。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="m6-q1b" value="b"><span><span class="opt-key">B</span> 告诉 qdisc 是否接受/需要重排<span class="opt-why">对。NETDEV_TX_OK/BUSY 等影响 qdisc 后续行为。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="m6-q1b" value="c"><span><span class="opt-key">C</span> 返回 TCP 窗口<span class="opt-why">与 TCP 无关。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>驱动只负责“把 skb 交给硬件队列”，不保证送达。</p>
+        </fieldset>
+
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">3.</span>多队列网卡把 flow 散列到不同队列，主要是为了：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="m6-q1c" value="a"><span><span class="opt-key">A</span> 减少 IP 地址<span class="opt-why">地址不变。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="m6-q1c" value="b"><span><span class="opt-key">B</span> 并行收包并把中断/轮询分散到多 CPU<span class="opt-why">对。RSS/RPS 把流量分摊，避免单 CPU 瓶颈。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="m6-q1c" value="c"><span><span class="opt-key">C</span> 自动加密<span class="opt-why">与加密无关。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>多队列是 scaling 的基础，后面才有 RPS/RFS/XPS。</p>
+        </fieldset>
+      </div>
+
+      <div class="gate-step">
+        <div class="gate-step-head"><span class="step-num">2</span><h4>用自己的话解释</h4><span class="gate-time">≈3 分钟 · 本地保存</span></div>
+        <div class="sa" data-sa="s6-1">
+          <label class="sa-label" for="sa-s6-1">用 3–4 句话解释 NAPI 为什么把“中断”改成“中断 + 轮询”？预算/权重在其中起什么作用？</label>
+          <textarea id="sa-s6-1" rows="4" placeholder="高 PPS、中断合并、CPU 公平……"></textarea>
+          <div class="sa-meta"><span class="wordcount">0 字</span><span class="save-status" aria-live="polite"></span><span class="spacer"></span><button type="button" class="textbtn" data-clear>清空</button></div>
+          <div class="sa-actions">
+            <button type="button" class="btn secondary small" data-reveal>查看参考答案</button>
+            <button type="button" class="textbtn" data-stuck>我卡住了</button>
+            <button type="button" class="textbtn" data-copy-mine">复制我的答案</button>
+          </div>
+          <div class="model" hidden>
+            <span class="model-kicker">参考答案</span>
+            <p>高包速率下每包一次中断会让 CPU 淹没在中断上下文里，吞吐反而下降。NAPI 让第一个包触发中断，然后关闭该队列中断，用 <code>napi_poll</code> 批量收包；队列空或预算用完后重新开中断。预算/权重限制一次轮询最多处理多少包，保证单个队列不会长期霸占 CPU，也让多队列可以并行分摊。</p>
+          </div>
+          <div class="selfcheck" aria-label="自查">
+            <label><input type="checkbox"> 我说明了每包中断的开销。</label>
+            <label><input type="checkbox"> 我说明了中断关闭 + 批量轮询。</label>
+            <label><input type="checkbox"> 我解释了预算对公平性的作用。</label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="recap">
+      <h4>本小节可以带走</h4>
+      <ul>
+        <li>net_device 挂 ops、队列与 NAPI；发送走 ndo_start_xmit。</li>
+        <li>收包：中断 → napi_schedule → napi_poll → netif_receive_skb。</li>
+        <li>预算/权重保证轮询不饿死其他任务。</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="s6-2" data-title="6.2 XDP 与 eBPF" data-read="7" data-check="5" data-next="下一节：Capstone">
+    <span class="section-label">模块 6 · 小节 2</span>
+    <h3>XDP 与 eBPF</h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
+    <figure class="video-block section-video">
+      <video controls preload="metadata" poster="assets/sec-s6-2-poster.jpg" aria-label="本节视频：s6-2">
+        <source src="assets/sec-s6-2.mp4" type="video/mp4">
+        你的浏览器不支持视频标签。
+      </video>
+      <figcaption><span>本节视频 · 看完就能动手</span><span>命令与源码来自 linux-src/</span></figcaption>
+    </figure>
+
+    <div class="screen">
+      <p>XDP 是网卡驱动收包路径上的一个钩子：在分配 skb 之前，直接对 <code>xdp_buff</code> 做判断，可以 <code>XDP_DROP</code>、<code>XDP_PASS</code>、<code>XDP_TX</code> 或重定向。它比 netfilter 更早、更快。</p>
+      <figure class="diagram">
+        <div class="diagram-note">XDP 在收包路径的位置</div>
+        <div class="mermaid">
+flowchart LR
+  W["网卡 DMA"] --> X["XDP 钩子<br/>xdp_buff"]
+  X -->|"DROP"| D["丢弃"]
+  X -->|"PASS"| S["分配 skb<br/>netif_receive_skb"]
+  X -->|"TX / REDIRECT"| T["另一块网卡 / CPU"]
+  S --> P["IP/TCP"]
+        </div>
+        <figcaption>XDP 在 skb 之前，所以能省掉分配与协议栈开销；代价是程序受 verifier 限制。</figcaption>
+        <details><summary>图源</summary><pre>flowchart LR
+  dma --> xdp --> drop
+  xdp --> pass --> skb --> stack
+  xdp --> tx</pre></details>
+      </figure>
+    </div>
+
+    <div class="screen">
+      <h4>安全边界：verifier</h4>
+      <p>eBPF 程序不是普通内核模块：它不能任意跳转、不能越界访问、不能无限循环。加载前 verifier 会做控制流与内存安全检查，确保程序不会把内核打崩。</p>
+      <div class="code">
+        <div class="code-head"><span>kernel/bpf/verifier.c:23783 · bpf_check</span></div>
+        <pre><code>int bpf_check(struct bpf_prog **prog, union bpf_attr *attr,
+	      bpfptr_t uattr, u32 uattr_size)
+{
+	...
+	ret = bpf_check_attach_target(...);
+	...
+	ret = do_check_main(...);
+	...
+}</code></pre>
+      </div>
+      <p>XDP 程序的典型结构是：读 Ethernet → 检查边界 → 读 IP → 判断 protocol → 返回动作。每一次访问都要先证明“没有越界”，否则 verifier 拒绝加载。</p>
+      <div class="callout">
+        <span class="label">性能与可观测性</span>
+        <p>XDP 适合 DDoS 过滤、负载均衡、采样；但调试比普通代码难。先用 <code>bpftool prog load</code> / <code>ip link set xdp</code> 验证，再用 map 计数，别一上来就写复杂逻辑。</p>
+      </div>
+    </div>
+
+    <div class="micro" data-micro data-good="b">
+      <p class="micro-q"><span class="tag">预测</span>XDP 程序里直接 <code>return XDP_DROP</code> 的效果是：</p>
+      <div class="micro-actions">
+        <button data-pick="a">包进入协议栈后丢弃</button>
+        <button data-pick="b">包在分配 skb 之前被丢弃</button>
+        <button data-pick="c">驱动停止工作</button>
+      </div>
+      <div class="micro-result" hidden data-msg-a="那更像 netfilter。" data-msg-b="对。XDP 在 skb 之前，DROP 省掉后续所有开销。"></div>
+    </div>
+
+    <figure class="diagram">
+      <div class="diagram-note">XDP 的四个动作</div>
+      <div class="mermaid">
+stateDiagram-v2
+  [*] --> PASS
+  [*] --> DROP
+  [*] --> TX
+  [*] --> REDIRECT
+  PASS --> [*]: 分配 skb
+  DROP --> [*]: 释放
+  TX --> [*]: 同一网卡发出
+  REDIRECT --> [*]: 另一网卡/CPU
+      </div>
+      <figcaption>四个返回值对应四条路径；DROP 最早、最便宜，REDIRECT 最灵活。</figcaption>
+      <details><summary>图源</summary><pre>stateDiagram-v2
+  PASS/DROP/TX/REDIRECT</pre></details>
+    </figure>
+    <div class="gate">
+      <div class="gate-step">
+        <div class="gate-step-head"><span class="step-num">1</span><h4>检查理解</h4><span class="gate-time">≈2 分钟 · 不计分</span></div>
+
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">1.</span>XDP 相对 netfilter 的优势主要是：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="m6-q2a" value="a"><span><span class="opt-key">A</span> 可以修改路由表<span class="opt-why">那是控制面。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="m6-q2a" value="b"><span><span class="opt-key">B</span> 在 skb 分配与协议栈之前处理<span class="opt-why">对。更早的钩子意味着更低的每包成本。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="m6-q2a" value="c"><span><span class="opt-key">C</span> 不需要 verifier<span class="opt-why">XDP 是 eBPF，必须过 verifier。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>越早处理，省掉的固定成本越多。</p>
+        </fieldset>
+
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">2.</span>verifier 的核心职责是：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="m6-q2b" value="a"><span><span class="opt-key">A</span> 优化程序性能<span class="opt-why">JIT 才做优化。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="m6-q2b" value="b"><span><span class="opt-key">B</span> 证明内存安全与控制流合法<span class="opt-why">对。越界、未初始化、无限循环都会被拒。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="m6-q2b" value="c"><span><span class="opt-key">C</span> 分配 map<span class="opt-why">map 由用户态/内核 API 创建。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>verifier 是 eBPF 能在内核里安全运行的前提。</p>
+        </fieldset>
+
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">3.</span>XDP 的 <code>XDP_PASS</code> 表示：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="m6-q2c" value="a"><span><span class="opt-key">A</span> 丢弃<span class="opt-why">DROP 才是丢弃。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="m6-q2c" value="b"><span><span class="opt-key">B</span> 继续走正常收包路径<span class="opt-why">对。分配 skb，交给协议栈。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="m6-q2c" value="c"><span><span class="opt-key">C</span> 从另一块网卡发出<span class="opt-why">那是 XDP_TX/REDIRECT。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>四个动作要分清：DROP / PASS / TX / REDIRECT。</p>
+        </fieldset>
+      </div>
+
+      <div class="gate-step">
+        <div class="gate-step-head"><span class="step-num">2</span><h4>用自己的话解释</h4><span class="gate-time">≈3 分钟 · 本地保存</span></div>
+        <div class="sa" data-sa="s6-2">
+          <label class="sa-label" for="sa-s6-2">用 3–4 句话解释：XDP 为什么能比 netfilter 更快？verifier 又为什么必须存在？两者是不是矛盾？</label>
+          <textarea id="sa-s6-2" rows="4" placeholder="钩子位置、skb、内存安全……"></textarea>
+          <div class="sa-meta"><span class="wordcount">0 字</span><span class="save-status" aria-live="polite"></span><span class="spacer"></span><button type="button" class="textbtn" data-clear>清空</button></div>
+          <div class="sa-actions">
+            <button type="button" class="btn secondary small" data-reveal>查看参考答案</button>
+            <button type="button" class="textbtn" data-stuck>我卡住了</button>
+            <button type="button" class="textbtn" data-copy-mine>复制我的答案</button>
+          </div>
+          <div class="model" hidden>
+            <span class="model-kicker">参考答案</span>
+            <p>XDP 在驱动收包路径上、分配 skb 之前运行，直接操作 <code>xdp_buff</code>，所以省掉了 skb 分配、协议栈解析等固定成本，适合线速过滤与重定向。verifier 在加载前做静态检查，证明程序不会越界、不会无限循环、不会破坏内核状态，否则任意 eBPF 程序就等于任意内核代码。两者不矛盾：XDP 把执行点提前以获得性能，verifier 把“可执行范围”限制在可证明安全的子集里。</p>
+          </div>
+          <div class="selfcheck" aria-label="自查">
+            <label><input type="checkbox"> 我指出了 XDP 在 skb 之前。</label>
+            <label><input type="checkbox"> 我说明了省掉哪些固定成本。</label>
+            <label><input type="checkbox"> 我解释了 verifier 的安全边界。</label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="recap">
+      <h4>本小节可以带走</h4>
+      <ul>
+        <li>XDP 在 skb 之前处理，动作有 DROP/PASS/TX/REDIRECT。</li>
+        <li>eBPF 程序必须通过 verifier 的内存与控制流检查。</li>
+        <li>越早的钩子性能越好，但可用的内核功能越少。</li>
+      </ul>
+    </div>
+  </section>
+
+  <div class="lab" data-lab="lab-xdp" id="lab-xdp">
+    <div class="lab-head">
+      <div class="lab-kicker">实验 7 · 35 分钟 · 难度：高 · 需要 Lima VM</div>
+      <h3>写一个 XDP 程序丢弃 ICMP</h3>
+      <p class="lab-sub">编译 eBPF、挂到 veth 收包端、验证 ping 被丢，再卸载恢复。</p>
+    </div>
+    <div class="lab-body">
+      <p class="lab-broken"><span class="label">当前状态</span><code>xdp_drop.c</code> 永远返回 <code>XDP_PASS</code>；挂载后 ping 仍然成功，脚本会报 unexpected。</p>
+
+      <div class="lab-grid">
+        <div>
+          <h4>任务</h4>
+          <ol class="task-list">
+            <li>检查 Ethernet 头边界。</li>
+            <li>只处理 <code>ETH_P_IP</code>。</li>
+            <li>检查 IPv4 头边界，判断 <code>IPPROTO_ICMP</code>。</li>
+            <li>返回 DROP/PASS；编译并挂到 veth 收包端。</li>
+            <li>验证挂载后 ping 失败，卸载后成功。</li>
+          </ol>
+          <h4>交付物</h4>
+          <div class="pathline"><code>linux-course/work/lab-xdp/xdp_drop.c</code><button class="copy" data-copy="linux-course/work/lab-xdp/xdp_drop.c">复制路径</button></div>
+          <h4>构建/运行</h4>
+          <pre class="term"><span class="p">$</span> sudo sh run.sh</pre>
+        </div>
+        <div>
+          <h4>只读预览</h4>
+          <div class="lab-preview"><pre>SEC("xdp")
+int xdp_drop_icmp(struct xdp_md *ctx)
+{
+	void *data = (void *)(long)ctx->data;
+	void *end = (void *)(long)ctx->data_end;
+
+	/* TODO: eth -> ip -> icmp */
+	return XDP_PASS;
+}</pre></div>
+          <div class="lab-actions">
+            <button type="button" class="btn" data-check>检查我的实验</button>
+            <span class="lab-status">VM 内 clang -target bpf + ip link</span>
+          </div>
+          <div class="lab-results" hidden></div>
+        </div>
+      </div>
+
+      <details class="hints">
+        <summary>三级提示</summary>
+        <div class="hint"><b>提示 1 · 边界</b>每次转型前都判断 <code>(void *)(eth+1) &gt; end</code>，否则 verifier 拒绝。</div>
+        <div class="hint"><b>提示 2 · 字节序</b><code>eth-&gt;h_proto</code> 是大端，用 <code>__builtin_bswap16(ETH_P_IP)</code> 比较。</div>
+        <div class="hint"><b>提示 3 · 挂载点</b>XDP 在收包端生效：veth 对端收到包的那块设备。脚本已经把它放进 ns2 的 veth1。</div>
+      </details>
+
+      <p class="lab-foot">终端检查：<code>node linux-course/check.mjs lab-xdp</code>；恢复骨架：<code>node linux-course/lab.mjs restore lab-xdp</code>。</p>
+    </div>
+  </div>
+
+  <div class="lab" id="capstone">
+    <div class="lab-head">
+      <div class="lab-kicker">Capstone · 1–2 小时 · 可选</div>
+      <h3>写一个虚拟 netdev，并让它出现在 <code>ip link</code> 里</h3>
+      <p class="lab-sub">把前面所有东西接起来：模块、net_device、ndo_start_xmit、统计与清理。没有自动检查，按清单自评。</p>
+    </div>
+    <div class="lab-body">
+      <div class="lab-grid">
+        <div>
+          <h4>任务</h4>
+          <ol class="task-list">
+            <li>用 <code>alloc_netdev</code> 分配一个 Ethernet 类型的设备。</li>
+            <li>实现 <code>ndo_start_xmit</code>：释放 skb、递增 tx 计数、返回 <code>NETDEV_TX_OK</code>。</li>
+            <li><code>register_netdev</code> / <code>unregister_netdev</code>，模块退出时清理。</li>
+            <li>加载后 <code>ip link</code> 能看到它，<code>ip -s link</code> 能看到计数。</li>
+            <li>写 3 段笔记：设备生命周期、发送返回值语义、失败清理。</li>
+          </ol>
+        </div>
+        <div>
+          <h4>参考路径</h4>
+          <p class="muted" style="font-size:14px">从 <code>drivers/net/dummy.c</code> 开始读：它是最小的 netdev 例子。不要直接抄；先回答“如果没有 ndo_start_xmit 会怎样”。</p>
+          <div class="pathline"><code>linux-src/drivers/net/dummy.c</code><button class="copy" data-copy="linux-src/drivers/net/dummy.c">复制路径</button></div>
+          <p class="muted" style="font-size:14px">把代码放在 <code>linux-course/work/capstone/vnet.c</code>，用 VM 里的内核头文件编译。</p>
+        </div>
+      </div>
+      <p class="lab-foot">这是“上手内核网络开发”的毕业作品：能编译、能加载、能在 <code>ip link</code> 看到、能安全卸载。做完它，再去看真实驱动会顺很多。</p>
+    </div>
+  </div>
+</div>
+</section>
+
+  </main>
+</div>
+
+<footer id="reading">
+  <div class="wrap">
+    <h3>课程之后：继续读内核</h3>
+    <p>网络栈的阅读顺序建议从“对象 + 数据路径”开始，再看具体协议与驱动。下面这些是仓库内的原始文档。</p>
+    <div class="readorder">
+      <a href="https://github.com/torvalds/linux/blob/master/Documentation/networking/README.rst" target="_blank" rel="noopener">Documentation/networking/README.rst</a>
+      <a href="https://github.com/torvalds/linux/blob/master/Documentation/networking/skbuff.rst" target="_blank" rel="noopener">Documentation/networking/skbuff.rst</a>
+      <a href="https://github.com/torvalds/linux/blob/master/Documentation/networking/filter.rst" target="_blank" rel="noopener">Documentation/networking/filter.rst</a>
+      <a href="https://github.com/torvalds/linux/blob/master/Documentation/core-api/kernel-api.rst" target="_blank" rel="noopener">Documentation/core-api/kernel-api.rst</a>
+      <a href="https://github.com/torvalds/linux/blob/master/Documentation/process/submitting-patches.rst" target="_blank" rel="noopener">Documentation/process/submitting-patches.rst</a>
+      <a href="https://github.com/torvalds/linux/blob/master/Documentation/bpf/redirect.rst" target="_blank" rel="noopener">Documentation/bpf/redirect.rst</a>
+    </div>
+    <p class="smallprint">
+      课程源码：<code>linux-src/</code>（Linux 7.3.0，commit c339f40）。<br>
+      用户态 C 实验：macOS <code>cc</code>；内核实验：Lima Ubuntu VM。<br>
+      页面是只读预览；实验在真实文件、真实 VM 里完成。<br>
+      本地检查：<code>node linux-course/check.mjs &lt;lab-id&gt;</code>；启动页面：<code>node linux-course/serve.mjs</code>。
+    </p>
+  </div>
+</footer>
+
+<script src="assets/mermaid.min.js"></script>
+<script src="main.js" defer></script>
+<script src="section-check.js" defer></script>
+<script src="lab.js" defer></script>
+</body>
+</html>
