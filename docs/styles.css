@@ -837,6 +837,45 @@ pre.term .o {
   min-height: 1.4em;
 }
 
+/* ---------- ask first ---------- */
+.ask {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 8px 8px 0;
+  padding: 14px 18px;
+  margin: 18px 0 6px;
+  background: var(--surface);
+}
+
+.ask .q {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.55;
+  margin: 0 0 8px;
+}
+
+.ask .q .tag {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-right: 8px;
+}
+
+.ask .a {
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px dashed var(--border);
+  font-size: 14px;
+  color: var(--text-2);
+  line-height: 1.65;
+}
+
+.ask .a p {
+  margin: 0;
+}
+
 /* ---------- 60-second hands-on ---------- */
 .tryit {
   border: 1px solid var(--border);

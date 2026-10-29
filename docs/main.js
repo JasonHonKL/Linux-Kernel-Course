@@ -290,6 +290,19 @@
     });
   }
 
+  /* ---------- ask first ---------- */
+  function askCards() {
+    document.querySelectorAll("[data-ask]").forEach(function (box) {
+      var btn = box.querySelector("button");
+      var ans = box.querySelector(".a");
+      if (!btn || !ans) return;
+      btn.addEventListener("click", function () {
+        ans.hidden = !ans.hidden;
+        btn.textContent = ans.hidden ? "先想 10 秒，再看" : "收起答案";
+      });
+    });
+  }
+
   /* ---------- syntax highlighting ---------- */
   function guessLang(text) {
     if (/^\s*(import |def |class )/m.test(text) || /struct\.unpack|json\.dump/.test(text))
@@ -336,6 +349,7 @@
   /* ---------- start ---------- */
   document.addEventListener("DOMContentLoaded", function () {
     highlightCode();
+    askCards();
     renderDiagrams();
     buildRail();
     progress();

@@ -118,6 +118,11 @@ flowchart LR
   <section class="section" id="s1-1" data-title="1.1 内核 C 的五个习惯" data-read="7" data-check="5" data-next="下一节：地址空间">
     <span class="section-label">模块 1 · 小节 1</span>
     <h3>内核 C 的五个习惯</h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
+    <div class="ask" data-ask>
+      <p class="q"><span class="tag">先问</span>为什么内核链表不单独分配节点？</p>
+      <button type="button" class="textbtn">先想 10 秒，再看</button>
+      <div class="a" hidden><p>节点嵌在对象里，插入/删除不用额外分配；<code>container_of</code> 用成员地址减偏移找回对象。</p></div>
+    </div>
     <figure class="video-block section-video">
       <video controls preload="metadata" poster="assets/sec-s1-1-poster.jpg" aria-label="本节视频：s1-1">
         <source src="assets/sec-s1-1.mp4" type="video/mp4">
@@ -321,6 +326,11 @@ void *kc_err_ptr(long err)
   <section class="section" id="s1-2" data-title="1.2 地址空间：__user、__iomem、DMA" data-read="7" data-check="5" data-next="下一节：四个对象">
     <span class="section-label">模块 1 · 小节 2</span>
     <h3>地址空间：<code>__user</code>、<code>__iomem</code>、DMA</h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
+    <div class="ask" data-ask>
+      <p class="q"><span class="tag">先问</span>用户指针为什么不能直接读？</p>
+      <button type="button" class="textbtn">先想 10 秒，再看</button>
+      <div class="a" hidden><p>用户地址可能未映射或被换出；直接读会 oops，必须走 <code>copy_from_user</code>，失败返回 <code>-EFAULT</code>。</p></div>
+    </div>
     <figure class="video-block section-video">
       <video controls preload="metadata" poster="assets/sec-s1-2-poster.jpg" aria-label="本节视频：s1-2">
         <source src="assets/sec-s1-2.mp4" type="video/mp4">
@@ -554,6 +564,11 @@ static int __init hello_init(void)
   <section class="section" id="s2-1" data-title="2.1 四个对象" data-read="7" data-check="5" data-next="下一节：地址">
     <span class="section-label">模块 2 · 小节 1</span>
     <h3>四个对象</h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
+    <div class="ask" data-ask>
+      <p class="q"><span class="tag">先问</span>TCP 序列号在 socket 还是 sock？</p>
+      <button type="button" class="textbtn">先想 10 秒，再看</button>
+      <div class="a" hidden><p>在 <code>struct sock</code>（TCP 下是 <code>tcp_sock</code>）；socket 只是用户接口与方法表。</p></div>
+    </div>
     <figure class="video-block section-video">
       <video controls preload="metadata" poster="assets/sec-s2-1-poster.jpg" aria-label="本节视频：s2-1">
         <source src="assets/sec-s2-1.mp4" type="video/mp4">
@@ -704,6 +719,11 @@ flowchart LR
   <section class="section" id="s2-2" data-title="2.2 地址：sockaddr、IP、CIDR、MAC" data-read="7" data-check="5" data-next="下一节：socket()">
     <span class="section-label">模块 2 · 小节 2</span>
     <h3>地址：sockaddr、IP、CIDR、MAC</h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
+    <div class="ask" data-ask>
+      <p class="q"><span class="tag">先问</span>sin_port 用什么字节序？</p>
+      <button type="button" class="textbtn">先想 10 秒，再看</button>
+      <div class="a" hidden><p>端口和地址都是网络字节序（大端）；<code>sin_family</code> 是本机字节序。</p></div>
+    </div>
     <figure class="video-block section-video">
       <video controls preload="metadata" poster="assets/sec-s2-2-poster.jpg" aria-label="本节视频：s2-2">
         <source src="assets/sec-s2-2.mp4" type="video/mp4">
@@ -926,6 +946,11 @@ bool kc_cidr_contains(uint32_t net_be,
   <section class="section" id="s3-1" data-title="3.1 从 socket() 到 proto_ops" data-read="7" data-check="5" data-next="下一节：sendto">
     <span class="section-label">模块 3 · 小节 1</span>
     <h3>从 <code>socket()</code> 到 <code>proto_ops</code></h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
+    <div class="ask" data-ask>
+      <p class="q"><span class="tag">先问</span>socket() 会建立连接吗？</p>
+      <button type="button" class="textbtn">先想 10 秒，再看</button>
+      <div class="a" hidden><p>不会。它只创建对象、选择协议、装好 ops；<code>connect</code> 才推进 TCP 状态机。</p></div>
+    </div>
     <figure class="video-block section-video">
       <video controls preload="metadata" poster="assets/sec-s3-1-poster.jpg" aria-label="本节视频：s3-1">
         <source src="assets/sec-s3-1.mp4" type="video/mp4">
@@ -1088,6 +1113,11 @@ sequenceDiagram
   <section class="section" id="s3-2" data-title="3.2 sendto：从 fd 到 tcp_sendmsg" data-read="7" data-check="5" data-next="下一节：IP 与路由">
     <span class="section-label">模块 3 · 小节 2</span>
     <h3><code>sendto</code>：从 fd 到 <code>tcp_sendmsg</code></h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
+    <div class="ask" data-ask>
+      <p class="q"><span class="tag">先问</span>sendto 先找 fd 还是先拷地址？</p>
+      <button type="button" class="textbtn">先想 10 秒，再看</button>
+      <div class="a" hidden><p>先 import 用户 buffer、fdget 找 socket；有目标地址时才 <code>move_addr_to_kernel</code>。</p></div>
+    </div>
     <figure class="video-block section-video">
       <video controls preload="metadata" poster="assets/sec-s3-2-poster.jpg" aria-label="本节视频：s3-2">
         <source src="assets/sec-s3-2.mp4" type="video/mp4">
@@ -1328,6 +1358,11 @@ for (;;) {
   <section class="section" id="s4-1" data-title="4.1 IPv4 头与地址" data-read="7" data-check="5" data-next="下一节：路由与邻居">
     <span class="section-label">模块 4 · 小节 1</span>
     <h3>IPv4 头与地址</h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
+    <div class="ask" data-ask>
+      <p class="q"><span class="tag">先问</span>IPv4 头第一步读哪几位？</p>
+      <button type="button" class="textbtn">先想 10 秒，再看</button>
+      <div class="a" hidden><p>先读 <code>version/ihl</code>：确认 IPv4 与头长，后面的字段偏移才可信。</p></div>
+    </div>
     <figure class="video-block section-video">
       <video controls preload="metadata" poster="assets/sec-s4-1-poster.jpg" aria-label="本节视频：s4-1">
         <source src="assets/sec-s4-1.mp4" type="video/mp4">
@@ -1517,6 +1552,11 @@ flowchart LR
   <section class="section" id="s4-2" data-title="4.2 路由与邻居" data-read="7" data-check="5" data-next="下一节：sk_buff">
     <span class="section-label">模块 4 · 小节 2</span>
     <h3>路由与邻居</h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
+    <div class="ask" data-ask>
+      <p class="q"><span class="tag">先问</span>路由和 ARP 各回答什么？</p>
+      <button type="button" class="textbtn">先想 10 秒，再看</button>
+      <div class="a" hidden><p>路由回答从哪个接口/下一跳出去；ARP 或 ND 回答下一跳的 MAC。</p></div>
+    </div>
     <figure class="video-block section-video">
       <video controls preload="metadata" poster="assets/sec-s4-2-poster.jpg" aria-label="本节视频：s4-2">
         <source src="assets/sec-s4-2.mp4" type="video/mp4">
@@ -1722,6 +1762,11 @@ ip netns add kc-ns2
   <section class="section" id="s5-1" data-title="5.1 sk_buff 的四个指针" data-read="7" data-check="5" data-next="下一节：TCP 与 qdisc">
     <span class="section-label">模块 5 · 小节 1</span>
     <h3>sk_buff 的四个指针</h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
+    <div class="ask" data-ask>
+      <p class="q"><span class="tag">先问</span>skb_push 动哪个指针？</p>
+      <button type="button" class="textbtn">先想 10 秒，再看</button>
+      <div class="a" hidden><p><code>data</code>。push 往前移 data，put 往后移 tail。</p></div>
+    </div>
     <figure class="video-block section-video">
       <video controls preload="metadata" poster="assets/sec-s5-1-poster.jpg" aria-label="本节视频：s5-1">
         <source src="assets/sec-s5-1.mp4" type="video/mp4">
@@ -1916,6 +1961,11 @@ int kc_parse_eth_ip_tcp(const struct kc_skb *skb,
   <section class="section" id="s5-2" data-title="5.2 TCP 发送与 qdisc" data-read="7" data-check="5" data-next="下一节：驱动与 NAPI">
     <span class="section-label">模块 5 · 小节 2</span>
     <h3>TCP 发送与 qdisc</h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
+    <div class="ask" data-ask>
+      <p class="q"><span class="tag">先问</span>sendto 成功等于对方收到吗？</p>
+      <button type="button" class="textbtn">先想 10 秒，再看</button>
+      <div class="a" hidden><p>不等于。成功只表示本地协议栈接受；后面还可能排队、丢包、重传。</p></div>
+    </div>
     <figure class="video-block section-video">
       <video controls preload="metadata" poster="assets/sec-s5-2-poster.jpg" aria-label="本节视频：s5-2">
         <source src="assets/sec-s5-2.mp4" type="video/mp4">
@@ -2075,6 +2125,11 @@ stateDiagram-v2
   <section class="section" id="s6-1" data-title="6.1 net_device 与 NAPI" data-read="7" data-check="5" data-next="下一节：XDP">
     <span class="section-label">模块 6 · 小节 1</span>
     <h3><code>net_device</code> 与 NAPI</h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
+    <div class="ask" data-ask>
+      <p class="q"><span class="tag">先问</span>NAPI 为什么把中断改轮询？</p>
+      <button type="button" class="textbtn">先想 10 秒，再看</button>
+      <div class="a" hidden><p>高包速率下每包中断会压垮 CPU；批量轮询摊薄成本，预算限制公平。</p></div>
+    </div>
     <figure class="video-block section-video">
       <video controls preload="metadata" poster="assets/sec-s6-1-poster.jpg" aria-label="本节视频：s6-1">
         <source src="assets/sec-s6-1.mp4" type="video/mp4">
@@ -2225,6 +2280,11 @@ flowchart TB
   <section class="section" id="s6-2" data-title="6.2 XDP 与 eBPF" data-read="7" data-check="5" data-next="下一节：Capstone">
     <span class="section-label">模块 6 · 小节 2</span>
     <h3>XDP 与 eBPF</h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
+    <div class="ask" data-ask>
+      <p class="q"><span class="tag">先问</span>XDP 在 skb 之前还是之后？</p>
+      <button type="button" class="textbtn">先想 10 秒，再看</button>
+      <div class="a" hidden><p>之前。XDP 在分配 skb 前处理，能省掉协议栈开销。</p></div>
+    </div>
     <figure class="video-block section-video">
       <video controls preload="metadata" poster="assets/sec-s6-2-poster.jpg" aria-label="本节视频：s6-2">
         <source src="assets/sec-s6-2.mp4" type="video/mp4">
