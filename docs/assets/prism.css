@@ -1,0 +1,95 @@
+/* Prism token palette: GitHub Light High Contrast, ≥7:1 on white. */
+code[class*="language-"],
+pre[class*="language-"],
+.language-c,
+.language-bash,
+.language-python,
+.language-json {
+	color: #010409;
+	text-shadow: none;
+}
+
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata {
+	color: #4b535d;
+}
+
+.token.punctuation {
+	color: #24292f;
+}
+
+.token.namespace {
+	opacity: 1;
+	color: #4b535d;
+}
+
+.token.property,
+.token.tag,
+.token.constant,
+.token.symbol,
+.token.deleted {
+	color: #8a2c0d;
+}
+
+.token.boolean,
+.token.number {
+	color: #0349b4;
+}
+
+.token.selector,
+.token.attr-name,
+.token.string,
+.token.char,
+.token.builtin,
+.token.inserted {
+	color: #024c1a;
+}
+
+.token.operator,
+.token.entity,
+.token.url,
+.language-css .token.string,
+.style .token.string {
+	color: #7a2e0e;
+	background: transparent;
+}
+
+.token.atrule,
+.token.attr-value,
+.token.keyword {
+	color: #a0111f;
+}
+
+.token.function,
+.token.class-name {
+	color: #5a24a8;
+}
+
+.token.regex,
+.token.important,
+.token.variable {
+	color: #8a2c0d;
+}
+
+.token.important,
+.token.bold {
+	font-weight: 700;
+}
+
+.token.italic {
+	font-style: italic;
+}
+
+/* Keep our code panel spacing; Prism must not inject its own background. */
+pre[class*="language-"] {
+	background: transparent;
+	margin: 0;
+	padding: 0;
+	overflow: visible;
+}
+
+.code pre code[class*="language-"] {
+	display: block;
+}

@@ -290,8 +290,52 @@
     });
   }
 
+  /* ---------- syntax highlighting ---------- */
+  function guessLang(text) {
+    if (/^\s*(import |def |class )/m.test(text) || /struct\.unpack|json\.dump/.test(text))
+      return "python";
+    if (/^#!\/bin\/sh|^ip netns|^make |^\$ /m.test(text)) return "bash";
+    if (/^\s*\{/m.test(text)) return "json";
+    return "c";
+  }
+
+  function highlightCode() {
+    if (!window.Prism) return;
+
+    document.querySelectorAll(".code pre code").forEach(function (el) {
+      if (!/\blanguage-/.test(el.className)) el.className = "language-c";
+    });
+
+    document.querySelectorAll(".translate .t-code").forEach(function (el) {
+      if (!/\blanguage-/.test(el.className)) el.classList.add("language-c");
+    });
+
+    document.querySelectorAll(".lab-preview pre").forEach(function (pre) {
+      var code = pre.querySelector("code");
+      if (!code) {
+        code = document.createElement("code");
+        code.textContent = pre.textContent;
+        pre.textContent = "";
+        pre.appendChild(code);
+      }
+      if (!/\blanguage-/.test(code.className))
+        code.className = "language-" + guessLang(code.textContent);
+    });
+
+    document
+      .querySelectorAll('code[class*="language-"], .t-code[class*="language-"]')
+      .forEach(function (el) {
+        try {
+          window.Prism.highlightElement(el);
+        } catch (e) {
+          /* leave the block unhighlighted rather than break the page */
+        }
+      });
+  }
+
   /* ---------- start ---------- */
   document.addEventListener("DOMContentLoaded", function () {
+    highlightCode();
     renderDiagrams();
     buildRail();
     progress();
