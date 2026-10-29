@@ -36,6 +36,9 @@ node linux-course/lab.mjs start all
 |---|---|---|
 | `lab-inode` | VM | 硬链接 / inode |
 | `lab-passwd` | VM | passwd / shadow / 用户 |
+| `lab-chardev` | VM | 字符设备 /dev/kcdev |
+| `lab-kthread` | VM | kthread + /proc |
+| `lab-netdev` | VM | 虚拟网卡 kcnet0 |
 | `lab-mmap` | macOS C | shared / private mmap |
 | `lab-kernel-c` | macOS C | container_of / 链表 |
 | `lab-module` | VM | 模块 + /proc |

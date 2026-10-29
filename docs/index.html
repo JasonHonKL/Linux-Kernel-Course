@@ -13,7 +13,7 @@
 <body>
 <header class="topnav">
   <div class="brand"><span class="brand-mark"></span>Linux 全景</div>
-  <div class="navmeta">linux 7.3 · 22 章 · 11+1 实验 · 项目制</div>
+  <div class="navmeta">linux 7.3 · 22 章 · 14+1 实验 · 项目制</div>
   <nav class="navlinks" aria-label="课程导航">
     <a href="#boot">启动</a>
     <a href="#f1">文件</a>
@@ -43,7 +43,7 @@
   <div class="meta-row">
     <span><strong>22</strong> 章</span>
     <span><strong>28</strong> 节</span>
-    <span><strong>11+1</strong> 个实验</span>
+    <span><strong>14+1</strong> 个实验</span>
     <span><strong>≈24</strong> 小时</span>
     <span>轨道：<strong>Deep Diver</strong></span>
   </div>
@@ -1674,6 +1674,30 @@ static int __init hello_init(void)
       <p class="lab-foot">终端检查：<code>node linux-course/check.mjs lab-module</code>；VM 未就绪时先运行 <code>node linux-course/vm.mjs setup</code>。</p>
     </div>
   </div>
+  <div class="lab" data-lab="lab-chardev" id="lab-chardev">
+    <div class="lab-head"><div class="lab-kicker">实验 · 25 分钟 · 需要 Lima VM</div><h3>写一个字符设备 <code>/dev/kcdev</code></h3><p class="lab-sub">alloc_chrdev_region + cdev + class_create；read/write 用 copy_*_user，/proc/kcdev 统计读取次数。</p></div>
+    <div class="lab-body">
+      <p class="lab-broken"><span class="label">当前状态</span><code>kc_read/kc_write/kc_init</code> 都是 TODO；加载后没有设备。</p>
+      <div class="lab-grid"><div>
+        <h4>任务</h4><ol class="task-list"><li>读：<code>copy_to_user</code>，处理 offset/EOF。</li><li>写：<code>copy_from_user</code>，更新内容。</li><li>注册 chrdev + class/device。</li><li>创建 <code>/proc/kcdev</code> 输出 reads。</li><li>卸载时反向清理。</li></ol>
+        <div class="pathline"><code>linux-course/work/lab-chardev/kcdev.c</code><button class="copy" data-copy="linux-course/work/lab-chardev/kcdev.c">复制路径</button></div>
+      </div><div>
+        <h4>只读预览</h4><div class="lab-preview"><pre>static ssize_t kc_read(...)
+{
+    /* TODO: copy_to_user */
+    return -EINVAL;
+}
+static int __init kc_init(void)
+{
+    /* TODO: alloc_chrdev_region + cdev_add */
+    return 0;
+}</pre></div>
+        <div class="lab-actions"><button type="button" class="btn" data-check>检查我的实验</button><span class="lab-status">VM 内编译、加载、读写</span></div><div class="lab-results" hidden></div>
+      </div></div>
+      <details class="hints"><summary>三级提示</summary><div class="hint"><b>提示 1</b><code>alloc_chrdev_region(&amp;dev,0,1,"kcdev")</code>，再 <code>cdev_init/cdev_add</code>。</div><div class="hint"><b>提示 2</b><code>copy_to_user(buf, kc_msg+*off, len)</code>；EOF 返回 0。</div><div class="hint"><b>提示 3</b>exit 顺序：proc → device → class → cdev → unregister。</div></details>
+      <p class="lab-foot">检查：<code>node linux-course/check.mjs lab-chardev</code>。设备节点用 <code>/root/kcdev</code>（/tmp 是 nodev）。</p>
+    </div>
+  </div>
 </div>
 </section>
 
@@ -1870,7 +1894,31 @@ sequenceDiagram
       </div>
     </div>
 
-    <div class="lab project"><div class="lab-head"><div class="lab-kicker">P2 · 10–16 小时</div><h3>复现并修一个数据竞争</h3><p class="lab-sub">写一个模块或用户态程序制造 race，用 KCSAN/TSAN 抓到，再修；提交前后报告。</p></div><div class="lab-body"><p>交付：复现步骤、工具输出、修复 diff、为什么修复正确的论证。</p></div></div>
+      <div class="lab" data-lab="lab-kthread" id="lab-kthread">
+    <div class="lab-head"><div class="lab-kicker">实验 · 20 分钟 · 需要 Lima VM</div><h3>内核线程 + <code>/proc/kcthread</code></h3><p class="lab-sub">kthread_run 周期计数，module_param 调间隔，卸载时 kthread_stop。</p></div>
+    <div class="lab-body">
+      <p class="lab-broken"><span class="label">当前状态</span><code>kc_thread</code> 立即返回；没有计数、没有 /proc。</p>
+      <div class="lab-grid"><div>
+        <h4>任务</h4><ol class="task-list"><li>实现 <code>while (!kthread_should_stop())</code> 循环。</li><li><code>msleep(kc_interval)</code>，计数。</li><li>init 里 <code>kthread_run</code> + proc_create。</li><li>exit 里 remove_proc + <code>kthread_stop</code>。</li></ol>
+        <div class="pathline"><code>linux-course/work/lab-kthread/kcthread.c</code><button class="copy" data-copy="linux-course/work/lab-kthread/kcthread.c">复制路径</button></div>
+      </div><div>
+        <h4>只读预览</h4><div class="lab-preview"><pre>static int kc_thread(void *data)
+{
+    /* TODO: while (!kthread_should_stop()) */
+    return 0;
+}
+static int __init kc_init(void)
+{
+    /* TODO: kthread_run + proc_create */
+    return 0;
+}</pre></div>
+        <div class="lab-actions"><button type="button" class="btn" data-check>检查我的实验</button><span class="lab-status">VM 内加载并观察 ticks</span></div><div class="lab-results" hidden></div>
+      </div></div>
+      <details class="hints"><summary>三级提示</summary><div class="hint"><b>提示 1</b><code>kthread_run(kc_thread, NULL, "kcthread")</code>；失败用 <code>IS_ERR</code>。</div><div class="hint"><b>提示 2</b>循环里 <code>kc_count++</code> 后 <code>msleep(kc_interval)</code>。</div><div class="hint"><b>提示 3</b>exit 先 remove_proc，再 <code>kthread_stop(kc_task)</code>。</div></details>
+      <p class="lab-foot">检查：<code>node linux-course/check.mjs lab-kthread</code>。</p>
+    </div>
+  </div>
+<div class="lab project"><div class="lab-head"><div class="lab-kicker">P2 · 10–16 小时</div><h3>复现并修一个数据竞争</h3><p class="lab-sub">写一个模块或用户态程序制造 race，用 KCSAN/TSAN 抓到，再修；提交前后报告。</p></div><div class="lab-body"><p>交付：复现步骤、工具输出、修复 diff、为什么修复正确的论证。</p></div></div>
   </section>
 </div>
 </section>
@@ -3871,7 +3919,29 @@ int xdp_drop_icmp(struct xdp_md *ctx)
     </div>
   </div>
 
-  <div class="lab" id="capstone">
+    <div class="lab" data-lab="lab-netdev" id="lab-netdev">
+    <div class="lab-head"><div class="lab-kicker">实验 · 25 分钟 · 需要 Lima VM</div><h3>注册一张虚拟网卡 <code>kcnet0</code></h3><p class="lab-sub">alloc_netdev + ether_setup + register_netdev；ndo_start_xmit 释放 skb 并计数。</p></div>
+    <div class="lab-body">
+      <p class="lab-broken"><span class="label">当前状态</span><code>kc_ops</code> 里没有 ndo_start_xmit，init 不注册设备。</p>
+      <div class="lab-grid"><div>
+        <h4>任务</h4><ol class="task-list"><li>实现 <code>kc_xmit</code>：free skb + tx++。</li><li>设置 <code>.ndo_start_xmit</code>。</li><li>alloc_netdev/ether_setup/register_netdev。</li><li>/proc/kcnet 输出 tx。</li><li>卸载时 unregister + free。</li></ol>
+        <div class="pathline"><code>linux-course/work/lab-netdev/kcnet.c</code><button class="copy" data-copy="linux-course/work/lab-netdev/kcnet.c">复制路径</button></div>
+      </div><div>
+        <h4>只读预览</h4><div class="lab-preview"><pre>static netdev_tx_t kc_xmit(...)
+{
+    /* TODO: dev_kfree_skb; kc_tx++; */
+    return NETDEV_TX_OK;
+}
+static const struct net_device_ops kc_ops = {
+    /* TODO: .ndo_start_xmit */
+};</pre></div>
+        <div class="lab-actions"><button type="button" class="btn" data-check>检查我的实验</button><span class="lab-status">VM 内 ip link 验证</span></div><div class="lab-results" hidden></div>
+      </div></div>
+      <details class="hints"><summary>三级提示</summary><div class="hint"><b>提示 1</b><code>alloc_netdev(0,"kcnet%d",NET_NAME_ENUM,ether_setup)</code>。</div><div class="hint"><b>提示 2</b><code>kc_dev-&gt;netdev_ops = &amp;kc_ops</code> 再 register。</div><div class="hint"><b>提示 3</b>exit 顺序：proc → unregister → free。</div></details>
+      <p class="lab-foot">检查：<code>node linux-course/check.mjs lab-netdev</code>。</p>
+    </div>
+  </div>
+<div class="lab" id="capstone">
     <div class="lab-head">
       <div class="lab-kicker">Capstone · 1–2 小时 · 可选</div>
       <h3>写一个虚拟 netdev，并让它出现在 <code>ip link</code> 里</h3>
