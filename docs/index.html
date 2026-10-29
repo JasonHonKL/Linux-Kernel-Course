@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Linux 内核网络 · 从 socket 到网卡</title>
+<title>Linux 全景 · 从 passwd 到网络栈</title>
 <meta name="description" content="一门面向内核网络开发的中文课程：内核 C、地址、socket、sk_buff、路由、NAPI、XDP，配 9 个真实实验。">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%231f6f8b'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="styles.css">
@@ -12,14 +12,14 @@
 </head>
 <body>
 <header class="topnav">
-  <div class="brand"><span class="brand-mark"></span>Linux 内核网络</div>
-  <div class="navmeta">linux 7.3 · 6 模块 · 8+1 实验 · ≈9 小时</div>
+  <div class="brand"><span class="brand-mark"></span>Linux 全景</div>
+  <div class="navmeta">linux 7.3 · 10 模块 · 11+1 实验 · ≈14 小时</div>
   <nav class="navlinks" aria-label="课程导航">
-    <a href="#m1">内核 C</a>
-    <a href="#m2">地址</a>
-    <a href="#m3">socket</a>
-    <a href="#m4">路由</a>
-    <a href="#m6">驱动</a>
+    <a href="#f1">文件</a>
+    <a href="#f2">passwd</a>
+    <a href="#f3">进程</a>
+    <a href="#f4">mmap</a>
+    <a href="#m2">网络</a>
     <a href="#capstone">Capstone</a>
   </nav>
 </header>
@@ -38,23 +38,23 @@
 <div class="wrap">
 <section class="hero">
   <p class="eyebrow">自上而下 · 真实内核源码 · 中文</p>
-  <h1>一次 sendto，<br>怎么走到网卡？</h1>
-  <p class="lede">不从“什么是 socket”讲起。我们从一个已经发出的包开始，沿着 <code>socket → sock → sk_buff → IP → qdisc → net_device</code> 一路向下，同时把内核风格的 C 练成手感。</p>
+  <h1>Linux 全景：<br>从 passwd 到网络栈</h1>
+  <p class="lede">先问：登录时密码去哪了？<code>mmap</code> 为什么不立刻读文件？硬链接为什么共享 inode？从文件、用户、进程、内存一路问到 socket、路由与 XDP。</p>
   <div class="meta-row">
-    <span><strong>6</strong> 个模块</span>
-    <span><strong>12</strong> 个小节</span>
-    <span><strong>8+1</strong> 个实验</span>
-    <span><strong>≈9</strong> 小时</span>
+    <span><strong>10</strong> 个模块</span>
+    <span><strong>16</strong> 个小节</span>
+    <span><strong>11+1</strong> 个实验</span>
+    <span><strong>≈14</strong> 小时</span>
     <span>轨道：<strong>Deep Diver</strong></span>
   </div>
 
   <div class="hero-grid">
     <div class="video-block">
-      <video controls preload="metadata" poster="assets/linux-main-poster.jpg" aria-label="课程主讲解视频：一次 sendto 在内核网络栈中的路径">
+      <video controls preload="metadata" poster="assets/linux-main-poster.jpg" aria-label="网络深入模块主片：一次 sendto 在内核网络栈中的路径">
         <source src="assets/linux-main.mp4" type="video/mp4">
         你的浏览器不支持视频标签。可以打开 <code>linux-course/assets/linux-main.mp4</code>。
       </video>
-      <figcaption><span>主片 · 68 秒 · 中文旁白</span><span>每个小节另有 约 15–25 秒“跟着做”视频</span></figcaption>
+      <figcaption><span>网络深入模块主片 · 68 秒</span><span>基础模块先读问题卡与实验</span></figcaption>
     </div>
     <div class="start-card">
       <h2>开始之前</h2>
@@ -73,15 +73,11 @@
     <div class="diagram-note">课程地图</div>
     <div class="mermaid">
 flowchart LR
-  A["内核 C<br/>与地址空间"] --> B["网络栈地图<br/>与地址"]
-  B --> C["socket 层<br/>proto_ops"]
-  C --> D["IP / 路由<br/>ARP / ND"]
-  D --> E["sk_buff<br/>与 TCP"]
-  E --> F["驱动 / NAPI<br/>XDP"]
-  F --> G["Capstone<br/>虚拟 netdev"]
-  B -.-> L2["Lab 2/3<br/>sockaddr / skb"]
-  D -.-> L5["Lab 5/6<br/>LPM / netns"]
-  F -.-> L8["Lab 8<br/>XDP"]
+  A["文件 / inode"] --> B["passwd / 权限"]
+  B --> C["进程 / systemd"]
+  C --> D["内存 / mmap"]
+  D --> E["socket / 路由"]
+  E --> F["容器 / 模块 / XDP"]
     </div>
     <figcaption>先练内核 C 与地址，再沿一条发送路径向下；每个盒子都有可运行的实验。</figcaption>
     <details><summary>图源</summary><pre>flowchart LR
@@ -94,7 +90,7 @@ flowchart LR
 
   <div class="callout">
     <span class="label">一句话模型</span>
-    <p>Linux 网络栈 = <strong>socket 对象</strong>（谁在通信）+ <strong>sock 协议状态</strong>（TCP/UDP 怎么算）+ <strong>sk_buff</strong>（这一包的字节与元数据）+ <strong>net_device / NAPI</strong>（从哪进出）。<strong>地址</strong>决定每一步往哪走：fd 找 socket，路由找出口，邻居找 MAC。</p>
+    <p>Linux = <strong>文件/inode</strong>（名字只是目录项）+ <strong>用户/权限</strong>（UID/GID + capabilities）+ <strong>进程</strong>（task_struct + 地址空间）+ <strong>内存映射</strong>（VMA + page cache）+ <strong>网络</strong>（socket → skb → 设备）。内核提供机制，策略多半在用户态。</p>
   </div>
 
   <h3 style="font-family:var(--display);font-size:22px;margin:30px 0 8px">这门课对 C 的要求</h3>
@@ -102,10 +98,737 @@ flowchart LR
   <p>如果 C 只写过课程作业，前两节的 Lab 0 会补齐内核习惯；如果已经写过驱动，可以直接从模块实验开始。</p>
 
   <h3 style="font-family:var(--display);font-size:22px;margin:30px 0 8px">怎么用这门课</h3>
-  <p>每节先看 约 15–25 秒视频（目标 → 真实命令/输出 → 实验步骤 → 现在去做），再读图和源码，然后做 3 道选择题与 1 道简答。带实验的小节最后进 Lab；实验时间单独计算。</p>
+  <p>网络部分每节先看约 15–25 秒视频（目标 → 命令/输出 → 实验步骤 → 现在去做）；基础模块先看问题卡，再读图和做实验。然后做 3 道选择题与 1 道简答。带实验的小节最后进 Lab；实验时间单独计算。</p>
   <p>源码在 <code>linux-src/</code>（Linux 7.3.0）。行号会变，以你本地文件为准；视频和页面里的代码片段来自这棵树。</p>
 </section>
 </div>
+
+<section class="module" id="f1" data-num="A" data-title="文件、inode 与挂载">
+<div class="wrap">
+  <header class="module-head">
+    <div class="module-num">A</div>
+    <h2>文件、inode 与挂载</h2>
+    <p class="lede">Linux 的“文件”不是文件名，而是 inode；目录只是“名字 → inode”的表。理解这一层，`ls -l`、硬链接、挂载、`df` 才不会互相打架。</p>
+  </header>
+
+  <section class="section" id="f1-1" data-title="A.1 文件名只是目录里的一行" data-read="7" data-check="5" data-next="下一节：用户与 passwd">
+    <span class="section-label">基础模块 · 小节 1</span>
+    <h3>文件名只是目录里的一行</h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
+
+    <div class="ask" data-ask>
+      <p class="q"><span class="tag">先问</span>两个文件名不同，可能是同一个文件吗？</p>
+      <button type="button" class="textbtn">先想 10 秒，再看</button>
+      <div class="a" hidden><p>可以。硬链接就是多个目录项指向同一个 inode；文件名不是身份，inode 才是。</p></div>
+    </div>
+
+    <div class="screen">
+      <p>打开一个路径，内核先解析目录项（dentry），再拿到 inode。目录里存的是“名字 + inode 号”，不是文件内容。</p>
+      <figure class="diagram">
+        <div class="diagram-note">路径解析</div>
+        <div class="mermaid">
+flowchart LR
+  P["/home/jason/a.txt"] --> D1["dentry: home"]
+  D1 --> D2["dentry: jason"]
+  D2 --> D3["dentry: a.txt"]
+  D3 --> I["inode<br/>i_ino / i_mode / i_nlink"]
+  I --> B["数据块 / page cache"]
+        </div>
+        <figcaption>dentry 是名字到 inode 的缓存；inode 才是文件的身份与元数据。</figcaption>
+        <details><summary>图源</summary><pre>flowchart LR
+  path --> dentry --> inode --> data</pre></details>
+      </figure>
+      <div class="code">
+        <div class="code-head"><span>include/linux/fs.h · struct inode（节选）</span></div>
+        <pre><code>struct inode {
+	umode_t			i_mode;
+	unsigned short		i_opflags;
+	kuid_t			i_uid;
+	kgid_t			i_gid;
+	unsigned int		i_flags;
+	...
+	unsigned long		i_ino;
+	...
+	unsigned int		i_nlink;
+	...
+	loff_t			i_size;
+};</code></pre>
+      </div>
+      <p><code>i_nlink</code> 是硬链接计数。删除一个名字只减 1，减到 0 且没有进程打开，inode 和数据才释放。</p>
+    </div>
+
+    <div class="micro" data-micro data-good="b">
+      <p class="micro-q"><span class="tag">预测</span>对同一个文件做两次硬链接，`i_nlink` 会变成？</p>
+      <div class="micro-actions">
+        <button data-pick="a">1</button>
+        <button data-pick="b">3</button>
+        <button data-pick="c">0</button>
+      </div>
+      <div class="micro-result" hidden data-msg-a="原文件本身也算一个链接。" data-msg-b="对。原名字 + 两个硬链接 = 3。"></div>
+    </div>
+
+    <figure class="diagram">
+      <div class="diagram-note">硬链接 vs 符号链接</div>
+      <div class="mermaid">
+flowchart LR
+  A["a.txt"] --> I["inode 42"]
+  B["b.txt"] --> I
+  C["c.txt"] --> S["inode 43<br/>symlink"]
+  S -->|"内容是路径"| A
+        </div>
+        <figcaption>硬链接共享 inode；符号链接是另一个 inode，内容是一段路径字符串。</figcaption>
+        <details><summary>图源</summary><pre>flowchart LR
+  a --> inode42
+  b --> inode42
+  c --> symlink --> a</pre></details>
+      </figure>
+
+    <div class="screen">
+      <h4>挂载把一棵树接到另一棵树上</h4>
+      <p><code>mount</code> 不是复制文件，而是把某个文件系统（设备、loop 镜像、网络）挂到目录树的某个点。挂载点下面的原目录被“遮住”，直到卸载。</p>
+      <figure class="diagram">
+        <div class="diagram-note">挂载点</div>
+        <div class="mermaid">
+flowchart TB
+  R["/"] --> E["/etc"]
+  R --> M["/mnt"]
+  M --> MP["挂载点 /mnt/disk"]
+  MP --> FS["ext4 文件系统<br/>自己的 inode 树"]
+        </div>
+        <figcaption>挂载后，访问 /mnt/disk 进入的是新文件系统的根 inode，不是原目录。</figcaption>
+        <details><summary>图源</summary><pre>flowchart TB
+  / --> /mnt --> mountpoint --> ext4</pre></details>
+      </figure>
+    </div>
+
+    <div class="gate">
+      <div class="gate-step">
+        <div class="gate-step-head"><span class="step-num">1</span><h4>检查理解</h4><span class="gate-time">≈2 分钟 · 不计分</span></div>
+
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">1.</span>硬链接与符号链接的关键区别是：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="f1-q1" value="a"><span><span class="opt-key">A</span> 硬链接复制内容<span class="opt-why">硬链接不复制数据。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="f1-q1" value="b"><span><span class="opt-key">B</span> 硬链接共享 inode，符号链接是另一个 inode<span class="opt-why">对。符号链接的内容是目标路径字符串。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="f1-q1" value="c"><span><span class="opt-key">C</span> 两者完全相同<span class="opt-why">链接计数与跨文件系统行为不同。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>用 <code>stat -c '%i %h %F'</code> 看 inode 与链接数最直接。</p>
+        </fieldset>
+
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">2.</span>删除一个还有硬链接的文件名，会发生什么？</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="f1-q2" value="a"><span><span class="opt-key">A</span> 数据立即删除<span class="opt-why">还有链接时不会删。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="f1-q2" value="b"><span><span class="opt-key">B</span> <code>i_nlink</code> 减 1，减到 0 才释放<span class="opt-why">对。若仍有进程打开，也要等关闭。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="f1-q2" value="c"><span><span class="opt-key">C</span> 所有名字一起消失<span class="opt-why">只是当前目录项被移除。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>“删除文件”实际是“删除目录项 + 减链接计数”。</p>
+        </fieldset>
+
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">3.</span>挂载一个文件系统到目录 <code>/mnt/x</code> 后：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="f1-q3" value="a"><span><span class="opt-key">A</span> 原目录内容被复制到新盘<span class="opt-why">不复制。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="f1-q3" value="b"><span><span class="opt-key">B</span> 访问进入新文件系统的根，原目录被遮住<span class="opt-why">对。卸载后原目录重新可见。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="f1-q3" value="c"><span><span class="opt-key">C</span> 原目录被永久删除<span class="opt-why">卸载后还在。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>挂载是“接树”，不是“搬文件”。</p>
+        </fieldset>
+      </div>
+
+      <div class="gate-step">
+        <div class="gate-step-head"><span class="step-num">2</span><h4>用自己的话解释</h4><span class="gate-time">≈3 分钟 · 本地保存</span></div>
+        <div class="sa" data-sa="f1-1">
+          <label class="sa-label" for="sa-f1-1">用 2–3 句话解释：为什么说“文件名不是文件的身份”？硬链接与符号链接分别如何体现这一点？</label>
+          <textarea id="sa-f1-1" rows="4" placeholder="从 inode、目录项、链接计数想……"></textarea>
+          <div class="sa-meta"><span class="wordcount">0 字</span><span class="save-status" aria-live="polite"></span><span class="spacer"></span><button type="button" class="textbtn" data-clear>清空</button></div>
+          <div class="sa-actions">
+            <button type="button" class="btn secondary small" data-reveal>查看参考答案</button>
+            <button type="button" class="textbtn" data-stuck>我卡住了</button>
+            <button type="button" class="textbtn" data-copy-mine>复制我的答案</button>
+          </div>
+          <div class="model" hidden>
+            <span class="model-kicker">参考答案</span>
+            <p>文件名只是目录里的一个目录项，指向 inode；inode 保存元数据与数据位置，才是身份。硬链接让多个目录项指向同一个 inode，链接计数增加；符号链接则是独立的 inode，内容是目标路径字符串，目标删掉后会悬空。</p>
+          </div>
+          <div class="selfcheck" aria-label="自查">
+            <label><input type="checkbox"> 我点明文件名/目录项只是名字。</label>
+            <label><input type="checkbox"> 我说出硬链接共享 inode。</label>
+            <label><input type="checkbox"> 我说出符号链接是另一 inode + 路径。</label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="recap">
+      <h4>本小节可以带走</h4>
+      <ul>
+        <li>目录项 → inode → 数据；文件名不是身份。</li>
+        <li>硬链接共享 inode；符号链接是路径字符串。</li>
+        <li>删除 = 移除目录项 + 减 <code>i_nlink</code>。</li>
+      </ul>
+    </div>
+  </section>
+
+  <div class="lab" data-lab="lab-inode" id="lab-inode">
+    <div class="lab-head">
+      <div class="lab-kicker">实验 A · 20 分钟 · 需要 Lima VM</div>
+      <h3>用 inode 证明“文件”和“名字”不是一回事</h3>
+      <p class="lab-sub">创建文件、硬链接、符号链接，观察 inode 与链接计数；再删一个名字，确认数据还在。</p>
+    </div>
+    <div class="lab-body">
+      <p class="lab-broken"><span class="label">当前状态</span><code>inode.sh</code> 直接退出 1；没有文件、没有链接、没有 inode 证据。</p>
+      <div class="lab-grid">
+        <div>
+          <h4>任务</h4>
+          <ol class="task-list">
+            <li>创建 <code>a.txt</code>，写入一行。</li>
+            <li>创建硬链接 <code>b.txt</code> 与符号链接 <code>c.txt</code>。</li>
+            <li>用 <code>stat -c '%i %h %F %n'</code> 输出三者。</li>
+            <li>删除 <code>a.txt</code>，再次 stat，证明 b 仍可读。</li>
+          </ol>
+          <h4>交付物</h4>
+          <div class="pathline"><code>linux-course/work/lab-inode/inode.sh</code><button class="copy" data-copy="linux-course/work/lab-inode/inode.sh">复制路径</button></div>
+        </div>
+        <div>
+          <h4>只读预览</h4>
+          <div class="lab-preview"><pre>#!/bin/sh
+set -eu
+# TODO: create a.txt, b.txt (hard), c.txt (sym)
+# TODO: stat -c '%i %h %F %n' a.txt b.txt c.txt
+# TODO: rm a.txt; cat b.txt</pre></div>
+          <div class="lab-actions">
+            <button type="button" class="btn" data-check>检查我的实验</button>
+            <span class="lab-status">在 Lima VM 的临时目录运行</span>
+          </div>
+          <div class="lab-results" hidden></div>
+        </div>
+      </div>
+      <details class="hints"><summary>三级提示</summary>
+        <div class="hint"><b>提示 1</b><code>echo hello &gt; a.txt</code>；<code>ln a.txt b.txt</code>；<code>ln -s a.txt c.txt</code>。</div>
+        <div class="hint"><b>提示 2</b><code>stat -c '%i %h %F %n' a.txt b.txt c.txt</code>；硬链接的 inode 相同。</div>
+        <div class="hint"><b>提示 3</b><code>rm a.txt</code> 后 <code>cat b.txt</code> 仍输出 hello；<code>c.txt</code> 变成悬空链接。</div>
+      </details>
+      <p class="lab-foot">终端检查：<code>node linux-course/check.mjs lab-inode</code>；恢复：<code>node linux-course/lab.mjs restore lab-inode</code>。</p>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="module" id="f2" data-num="B" data-title="用户、passwd 与权限">
+<div class="wrap">
+  <header class="module-head">
+    <div class="module-num">B</div>
+    <h2>用户、<code>passwd</code> 与权限</h2>
+    <p class="lede">登录不是“输入密码然后进 shell”。内核只认 UID/GID；密码哈希、账户状态、PAM 策略都在用户态文件与库里。</p>
+  </header>
+
+  <section class="section" id="f2-1" data-title="B.1 登录时到底发生了什么" data-read="7" data-check="5" data-next="下一节：进程与 systemd">
+    <span class="section-label">基础模块 · 小节 1</span>
+    <h3>登录时到底发生了什么</h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
+
+    <div class="ask" data-ask>
+      <p class="q"><span class="tag">先问</span>密码存在 <code>/etc/passwd</code> 还是 <code>/etc/shadow</code>？</p>
+      <button type="button" class="textbtn">先想 10 秒，再看</button>
+      <div class="a" hidden><p>哈希在 <code>/etc/shadow</code>；<code>/etc/passwd</code> 的第二个字段通常只是 <code>x</code>。</p></div>
+    </div>
+
+    <div class="screen">
+      <p><code>getpwnam()</code> 先查 <code>/etc/passwd</code> 拿 UID/GID/home/shell；认证时再由 PAM 读 shadow 或走 LDAP/SSSD。内核只看到登录后的 UID。</p>
+      <figure class="diagram">
+        <div class="diagram-note">一次 ssh/登录</div>
+        <div class="mermaid">
+sequenceDiagram
+  participant C as 客户端
+  participant L as login/sshd
+  participant P as PAM
+  participant S as /etc/shadow
+  participant K as 内核
+  C->>L: 用户名 + 密码
+  L->>P: pam_authenticate
+  P->>S: 读哈希并校验
+  P-->>L: OK
+  L->>K: setuid(uid), exec(shell)
+        </div>
+        <figcaption>认证在用户态；进入 shell 前才 setuid，内核之后只认数字 UID。</figcaption>
+        <details><summary>图源</summary><pre>sequenceDiagram
+  C->>login: password
+  login->>PAM: authenticate
+  PAM->>shadow: hash
+  login->>kernel: setuid + exec</pre></details>
+      </figure>
+      <div class="code">
+        <div class="code-head"><span>/etc/passwd 与 /etc/shadow 的字段</span></div>
+        <pre><code># /etc/passwd
+jason:x:1000:1000:Jason:/home/jason:/bin/zsh
+#  user  passwd uid  gid  gecos home        shell
+
+# /etc/shadow
+jason:$y$j9T$...:19800:0:99999:7:::
+#  user  hash     lastchg min max warn inactive expire</code></pre>
+      </div>
+      <p><code>/etc/passwd</code> 必须可读（很多程序查 UID）；<code>/etc/shadow</code> 只有 root 可读。把哈希放回 passwd 是历史遗留，不要这么做。</p>
+    </div>
+
+    <div class="micro" data-micro data-good="b">
+      <p class="micro-q"><span class="tag">预测</span><code>id</code> 显示的 UID 是谁提供的？</p>
+      <div class="micro-actions">
+        <button data-pick="a">/etc/passwd</button>
+        <button data-pick="b">内核里的 cred</button>
+        <button data-pick="c">PAM</button>
+      </div>
+      <div class="micro-result" hidden data-msg-a="passwd 只在登录时查一次。" data-msg-b="对。登录后内核用 cred->uid/gid；名字只是用户态映射。"></div>
+    </div>
+
+    <div class="screen">
+      <h4>权限：mode 位 + capabilities</h4>
+      <p>传统权限是 9 个 mode 位（owner/group/other 的 rwx），加上 setuid/setgid/sticky。现代 Linux 还有 capabilities：把 root 的特权拆成 <code>CAP_NET_ADMIN</code>、<code>CAP_SYS_ADMIN</code> 等。</p>
+      <figure class="diagram">
+        <div class="diagram-note">root 不是全有全无</div>
+        <div class="mermaid">
+flowchart LR
+  R["root / UID 0"] --> C1["CAP_NET_ADMIN"]
+  R --> C2["CAP_SYS_ADMIN"]
+  R --> C3["CAP_DAC_OVERRIDE"]
+  U["普通用户 + file caps"] --> C1
+        </div>
+        <figcaption>容器里常见“非 root 但有某个 capability”；这比 setuid root 更小。</figcaption>
+        <details><summary>图源</summary><pre>flowchart LR
+  root --> caps
+  user --> filecaps</pre></details>
+      </figure>
+      <p><code>sudo</code> 不是“变成 root 的魔法”，而是按 sudoers 规则以另一个 UID 执行命令；它自己也是 setuid 程序 + PAM 策略。</p>
+    </div>
+
+    <div class="gate">
+      <div class="gate-step">
+        <div class="gate-step-head"><span class="step-num">1</span><h4>检查理解</h4><span class="gate-time">≈2 分钟 · 不计分</span></div>
+
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">1.</span>密码哈希通常在：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="f2-q1" value="a"><span><span class="opt-key">A</span> <code>/etc/passwd</code> 第二字段<span class="opt-why">现代系统通常是 x，哈希在 shadow。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="f2-q1" value="b"><span><span class="opt-key">B</span> <code>/etc/shadow</code><span class="opt-why">对。只有 root 可读。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="f2-q1" value="c"><span><span class="opt-key">C</span> 内核里<span class="opt-why">内核不保存用户密码哈希。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>passwd 是公开映射，shadow 是认证秘密。</p>
+        </fieldset>
+
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">2.</span>登录后内核用哪个 UID 判断权限？</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="f2-q2" value="a"><span><span class="opt-key">A</span> 每次查 /etc/passwd<span class="opt-why">内核不解析 passwd。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="f2-q2" value="b"><span><span class="opt-key">B</span> 进程 cred 里的 UID/GID<span class="opt-why">对。setuid 后 cred 改变，内核只看它。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="f2-q2" value="c"><span><span class="opt-key">C</span> PAM 缓存<span class="opt-why">PAM 是用户态认证。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden><code>struct cred</code> 是权限判断的源头。</p>
+        </fieldset>
+
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">3.</span>capabilities 相对 setuid root 的优势是：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="f2-q3" value="a"><span><span class="opt-key">A</span> 完全不需要权限检查<span class="opt-why">仍检查，只是粒度更细。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="f2-q3" value="b"><span><span class="opt-key">B</span> 只授予需要的单项特权<span class="opt-why">对。比如只给 CAP_NET_ADMIN，而不是整个 root。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="f2-q3" value="c"><span><span class="opt-key">C</span> 可以绕过 SELinux<span class="opt-why">两者叠加，不能绕过。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>最小特权原则：能只给一项，就不要给整个 root。</p>
+        </fieldset>
+      </div>
+
+      <div class="gate-step">
+        <div class="gate-step-head"><span class="step-num">2</span><h4>用自己的话解释</h4><span class="gate-time">≈3 分钟 · 本地保存</span></div>
+        <div class="sa" data-sa="f2-1">
+          <label class="sa-label" for="sa-f2-1">用 2–3 句话解释：为什么密码哈希放在 <code>/etc/shadow</code>，而 <code>/etc/passwd</code> 仍要可读？内核在其中参与哪一步？</label>
+          <textarea id="sa-f2-1" rows="4" placeholder="从 UID 映射、认证秘密、setuid 想……"></textarea>
+          <div class="sa-meta"><span class="wordcount">0 字</span><span class="save-status" aria-live="polite"></span><span class="spacer"></span><button type="button" class="textbtn" data-clear>清空</button></div>
+          <div class="sa-actions">
+            <button type="button" class="btn secondary small" data-reveal>查看参考答案</button>
+            <button type="button" class="textbtn" data-stuck>我卡住了</button>
+            <button type="button" class="textbtn" data-copy-mine>复制我的答案</button>
+          </div>
+          <div class="model" hidden>
+            <span class="model-kicker">参考答案</span>
+            <p><code>/etc/passwd</code> 提供 UID/GID/home/shell 的公开映射，很多程序需要读它，所以不能把哈希放这里。<code>/etc/shadow</code> 保存密码哈希与账户期限，只有 root 可读，降低离线爆破面。内核不参与密码校验，只在登录进程 setuid 后使用 cred 里的 UID/GID 做权限判断。</p>
+          </div>
+          <div class="selfcheck" aria-label="自查">
+            <label><input type="checkbox"> 我说清了 passwd 的公开映射作用。</label>
+            <label><input type="checkbox"> 我说清了 shadow 的认证秘密作用。</label>
+            <label><input type="checkbox"> 我指出内核只在 setuid 后使用 UID/GID。</label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="recap">
+      <h4>本小节可以带走</h4>
+      <ul>
+        <li>passwd 映射 UID；shadow 存哈希；PAM 做认证。</li>
+        <li>内核只认 cred 里的 UID/GID。</li>
+        <li>capabilities 把 root 特权拆细，sudo 只是策略执行。</li>
+      </ul>
+    </div>
+  </section>
+
+  <div class="lab" data-lab="lab-passwd" id="lab-passwd">
+    <div class="lab-head">
+      <div class="lab-kicker">实验 B · 20 分钟 · 需要 Lima VM</div>
+      <h3>读 passwd/shadow，创建一个用户</h3>
+      <p class="lab-sub">不靠“感觉”，用字段、UID、home、shell、shadow 状态证明账户真的建对了。</p>
+    </div>
+    <div class="lab-body">
+      <p class="lab-broken"><span class="label">当前状态</span><code>passwd.sh</code> 直接退出 1；没有用户、没有字段证据。</p>
+      <div class="lab-grid">
+        <div>
+          <h4>任务</h4>
+          <ol class="task-list">
+            <li>输出 root 的 passwd 行与 UID。</li>
+            <li><code>useradd -m -s /bin/bash kcuser</code>。</li>
+            <li>输出 kcuser 的 UID、home、shell。</li>
+            <li><code>passwd -l kcuser</code>，输出 shadow 的锁定状态。</li>
+            <li><code>userdel -r kcuser</code> 清理。</li>
+          </ol>
+          <h4>交付物</h4>
+          <div class="pathline"><code>linux-course/work/lab-passwd/passwd.sh</code><button class="copy" data-copy="linux-course/work/lab-passwd/passwd.sh">复制路径</button></div>
+        </div>
+        <div>
+          <h4>只读预览</h4>
+          <div class="lab-preview"><pre>getent passwd root
+# TODO: useradd
+# TODO: getent passwd kcuser
+# TODO: passwd -l kcuser
+# TODO: getent shadow kcuser | cut -d: -f1,2
+# TODO: userdel -r kcuser</pre></div>
+          <div class="lab-actions"><button type="button" class="btn" data-check>检查我的实验</button><span class="lab-status">在 VM 内以 root 运行</span></div>
+          <div class="lab-results" hidden></div>
+        </div>
+      </div>
+      <details class="hints"><summary>三级提示</summary>
+        <div class="hint"><b>提示 1</b><code>getent passwd kcuser</code> 输出 7 个字段；UID 在第 3 列。</div>
+        <div class="hint"><b>提示 2</b><code>useradd -m -s /bin/bash kcuser</code>；home 默认 <code>/home/kcuser</code>。</div>
+        <div class="hint"><b>提示 3</b><code>passwd -l</code> 会在 shadow 哈希前加 <code>!</code>；只输出用户名与第二字段，不要打印完整哈希。</div>
+      </details>
+      <p class="lab-foot">终端检查：<code>node linux-course/check.mjs lab-passwd</code>；恢复：<code>node linux-course/lab.mjs restore lab-passwd</code>。</p>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="module" id="f3" data-num="C" data-title="进程、信号与 systemd">
+<div class="wrap">
+  <header class="module-head">
+    <div class="module-num">C</div>
+    <h2>进程、信号与 systemd</h2>
+    <p class="lede">进程不是“一个运行中的程序”，而是 task_struct + 地址空间 + 文件表 + 凭据。信号是内核投递的异步事件；systemd 只是把进程生命周期写成单元。</p>
+  </header>
+
+  <section class="section" id="f3-1" data-title="C.1 进程与信号" data-read="7" data-check="5" data-next="下一节：内存与 mmap">
+    <span class="section-label">基础模块 · 小节 1</span>
+    <h3>进程与信号</h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
+
+    <div class="ask" data-ask>
+      <p class="q"><span class="tag">先问</span><code>fork()</code> 之后，父子进程共享内存吗？</p>
+      <button type="button" class="textbtn">先想 10 秒，再看</button>
+      <div class="a" hidden><p>写时复制：页表先共享只读，任一方写入才复制那一页。</p></div>
+    </div>
+
+    <div class="screen">
+      <p><code>fork</code> 复制 task_struct 与页表（COW），<code>exec</code> 替换地址空间。进程的“身份”还包括 fd 表、cred、namespace、cgroup。</p>
+      <figure class="diagram">
+        <div class="diagram-note">fork + exec</div>
+        <div class="mermaid">
+flowchart LR
+  P["父进程"] -->|"fork"| C["子进程<br/>复制页表/COW"]
+  C -->|"execve"| N["新程序<br/>替换地址空间"]
+  C -->|"exit"| Z["僵尸<br/>等 wait"]
+        </div>
+        <figcaption>fork 复制“壳”，exec 换“内容”；exit 后要有人 wait 回收。</figcaption>
+        <details><summary>图源</summary><pre>flowchart LR
+  parent -->|fork| child -->|execve| prog
+  child -->|exit| zombie</pre></details>
+      </figure>
+      <div class="code">
+        <div class="code-head"><span>/proc/&lt;pid&gt;/status 的关键字段</span></div>
+        <pre><code>Name:   bash
+State:  S (sleeping)
+Pid:    1234
+PPid:   1200
+Uid:    1000    1000    1000    1000
+Threads: 1
+VmRSS:  5120 kB</code></pre>
+      </div>
+    </div>
+
+    <div class="micro" data-micro data-good="b">
+      <p class="micro-q"><span class="tag">预测</span>子进程退出后，父进程不 <code>wait</code>，会留下什么？</p>
+      <div class="micro-actions">
+        <button data-pick="a">什么也不留</button>
+        <button data-pick="b">僵尸进程（zombie）</button>
+        <button data-pick="c">自动重启</button>
+      </div>
+      <div class="micro-result" hidden data-msg-a="退出状态需要父进程读取。" data-msg-b="对。task_struct 还在，状态 Z，等 wait 回收。"></div>
+    </div>
+
+    <div class="screen">
+      <h4>信号与 systemd</h4>
+      <p>信号是异步通知：<code>SIGTERM</code> 请求退出，<code>SIGKILL</code> 不可捕获。systemd 用 unit 描述“怎么启动、怎么停、失败怎么办”，并用 cgroup 管住整个进程组。</p>
+      <figure class="diagram">
+        <div class="diagram-note">service 生命周期</div>
+        <div class="mermaid">
+stateDiagram-v2
+  [*] --> inactive
+  inactive --> activating: start
+  activating --> active: exec 成功
+  active --> deactivating: stop / SIGTERM
+  deactivating --> inactive: 退出
+  active --> failed: 退出码非 0
+  failed --> activating: restart
+        </div>
+        <figcaption>systemd 不是“守护进程管理器”，而是用状态机 + cgroup 管一组进程。</figcaption>
+        <details><summary>图源</summary><pre>stateDiagram-v2
+  inactive --> activating --> active
+  active --> deactivating --> inactive
+  active --> failed --> activating</pre></details>
+      </figure>
+      <p><code>systemctl status</code> 看到的 Main PID、cgroup、日志，分别来自 unit、cgroup 与 journal。写一个 service 比写一个 daemon 更接近“可运维”。</p>
+    </div>
+
+    <div class="gate">
+      <div class="gate-step">
+        <div class="gate-step-head"><span class="step-num">1</span><h4>检查理解</h4><span class="gate-time">≈2 分钟 · 不计分</span></div>
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">1.</span><code>fork</code> 后父子进程内存：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="f3-q1" value="a"><span><span class="opt-key">A</span> 立即完整复制<span class="opt-why">用 COW 延迟复制。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="f3-q1" value="b"><span><span class="opt-key">B</span> 写时复制<span class="opt-why">对。页表先共享只读，写才复制页。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="f3-q1" value="c"><span><span class="opt-key">C</span> 完全共享可写<span class="opt-why">那会互相改坏。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>COW 是 fork 便宜、exec 昂贵的原因之一。</p>
+        </fieldset>
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">2.</span>僵尸进程的本质是：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="f3-q2" value="a"><span><span class="opt-key">A</span> 进程还在跑<span class="opt-why">已经退出。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="f3-q2" value="b"><span><span class="opt-key">B</span> task_struct 还在等父进程 wait<span class="opt-why">对。退出状态没被读取。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="f3-q2" value="c"><span><span class="opt-key">C</span> 内核线程<span class="opt-why">内核线程没有用户地址空间。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>父进程负责回收，systemd 常当“收尸者”。</p>
+        </fieldset>
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">3.</span><code>SIGKILL</code> 与 <code>SIGTERM</code> 的区别：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="f3-q3" value="a"><span><span class="opt-key">A</span> 都能被捕获<span class="opt-why">KILL 不能。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="f3-q3" value="b"><span><span class="opt-key">B</span> TERM 可捕获做清理，KILL 不可<span class="opt-why">对。先 TERM，超时再 KILL。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="f3-q3" value="c"><span><span class="opt-key">C</span> 完全一样<span class="opt-why">语义不同。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>运维脚本默认先 TERM，给进程清理机会。</p>
+        </fieldset>
+      </div>
+      <div class="gate-step">
+        <div class="gate-step-head"><span class="step-num">2</span><h4>用自己的话解释</h4><span class="gate-time">≈3 分钟 · 本地保存</span></div>
+        <div class="sa" data-sa="f3-1">
+          <label class="sa-label" for="sa-f3-1">用 2–3 句话解释：为什么 <code>fork</code> 用写时复制，而 <code>exec</code> 必须替换地址空间？这和“进程 = 程序”有什么区别？</label>
+          <textarea id="sa-f3-1" rows="4" placeholder="COW、execve、task_struct……"></textarea>
+          <div class="sa-meta"><span class="wordcount">0 字</span><span class="save-status" aria-live="polite"></span><span class="spacer"></span><button type="button" class="textbtn" data-clear>清空</button></div>
+          <div class="sa-actions"><button type="button" class="btn secondary small" data-reveal>查看参考答案</button><button type="button" class="textbtn" data-stuck>我卡住了</button><button type="button" class="textbtn" data-copy-mine>复制我的答案</button></div>
+          <div class="model" hidden><span class="model-kicker">参考答案</span><p>fork 需要快速创建一个几乎相同的子进程，COW 让父子先共享只读页，只有写入才复制，避免全量拷贝。exec 要运行另一个程序，必须用新的可执行文件重建地址空间、栈、堆与映射，因此不能复用旧内容。进程是 task_struct + 地址空间 + fd/cred 等状态的集合，程序只是磁盘上的可执行文件。</p></div>
+          <div class="selfcheck" aria-label="自查"><label><input type="checkbox"> 我说明了 COW 避免全量拷贝。</label><label><input type="checkbox"> 我说明了 exec 重建地址空间。</label><label><input type="checkbox"> 我区分了进程与程序。</label></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="recap"><h4>本小节可以带走</h4><ul><li>fork = COW 复制，exec = 换地址空间。</li><li>僵尸 = 退出状态未被 wait 回收。</li><li>systemd 用 unit + cgroup 管生命周期。</li></ul></div>
+  </section>
+
+  <div class="tryit">
+    <div class="tryit-head"><span class="label">60 秒动手</span><span class="t">≈2 分钟</span></div>
+    <p>在一个 sleep 进程上读 <code>/proc</code>，然后给它发 TERM。</p>
+    <pre class="term">$ sleep 30 &amp;
+$ pid=$!
+$ grep -E '^(Name|State|Pid|PPid|Uid|Threads)' /proc/$pid/status
+$ ls -l /proc/$pid/fd
+$ kill -TERM $pid</pre>
+    <details><summary>看预期输出</summary><pre class="term">Name:   sleep
+State:  S (sleeping)
+Pid:    4242
+PPid:   4000
+Uid:    1000    1000    1000    1000
+Threads: 1
+lrwx------ 1 user user 64 ... 0 -&gt; /dev/pts/0</pre></details>
+    <p class="tryit-note">能看到 fd 0/1/2；TERM 后进程消失。systemd 管服务时做的就是这些 + cgroup。</p>
+  </div>
+</div>
+</section>
+
+<section class="module" id="f4" data-num="D" data-title="内存与 mmap">
+<div class="wrap">
+  <header class="module-head">
+    <div class="module-num">D</div>
+    <h2>内存与 mmap</h2>
+    <p class="lede">进程看到的地址不是物理内存，而是页表映射。mmap 把文件或匿名页接进地址空间；page fault 才真正分配/读入。理解这一层，`free`、RSS、OOM、page cache 才说得清。</p>
+  </header>
+
+  <section class="section" id="f4-1" data-title="D.1 虚拟地址、mmap 与 page cache" data-read="7" data-check="5" data-next="下一节：网络与容器">
+    <span class="section-label">基础模块 · 小节 1</span>
+    <h3>虚拟地址、<code>mmap</code> 与 page cache</h3><span class="timechip">阅读 ≈7 分钟 · 检查 ≈5 分钟</span>
+
+    <div class="ask" data-ask>
+      <p class="q"><span class="tag">先问</span><code>mmap</code> 一个文件后，文件内容会立刻全部读进内存吗？</p>
+      <button type="button" class="textbtn">先想 10 秒，再看</button>
+      <div class="a" hidden><p>不会。只建立 VMA 与页表项；访问到哪一页才触发 page fault，从 page cache 或磁盘取。</p></div>
+    </div>
+
+    <div class="screen">
+      <p>每个进程有独立的虚拟地址空间，<code>mmap</code> 在其中登记一段 VMA（<code>vm_area_struct</code>）。真正读文件发生在缺页：内核找 page cache，没有就从磁盘读。</p>
+      <figure class="diagram">
+        <div class="diagram-note">mmap + page fault</div>
+        <div class="mermaid">
+flowchart LR
+  P["进程访问 addr"] --> V["VMA 匹配"]
+  V --> PT{"页表有映射？"}
+  PT -->|"有"| M["直接访问"]
+  PT -->|"否"| F["page fault"]
+  F --> C{"page cache 命中？"}
+  C -->|"是"| M
+  C -->|"否"| D["读磁盘 → page cache"]
+  D --> M
+        </div>
+        <figcaption>mmap 只是“登记区间”；缺页才把文件页接进页表。</figcaption>
+        <details><summary>图源</summary><pre>flowchart LR
+  access --> vma --> fault --> pagecache --> disk</pre></details>
+      </figure>
+      <div class="code">
+        <div class="code-head"><span>include/linux/mm_types.h · struct vm_area_struct（节选）</span></div>
+        <pre><code>struct vm_area_struct {
+	unsigned long vm_start;
+	unsigned long vm_end;
+	struct mm_struct *vm_mm;
+	pgprot_t vm_page_prot;
+	unsigned long vm_flags;
+	...
+	struct file *vm_file;
+	...
+};</code></pre>
+      </div>
+    </div>
+
+    <div class="micro" data-micro data-good="b">
+      <p class="micro-q"><span class="tag">预测</span><code>mmap(MAP_SHARED)</code> 写入后，另一进程读同一个文件会看到吗？</p>
+      <div class="micro-actions">
+        <button data-pick="a">不会，除非 fsync</button>
+        <button data-pick="b">会，改的是 page cache</button>
+        <button data-pick="c">只有同进程可见</button>
+      </div>
+      <div class="micro-result" hidden data-msg-a="fsync 影响落盘，不影响页缓存可见性。" data-msg-b="对。MAP_SHARED 写 page cache，其他映射/read 都能看到；落盘另说。"></div>
+    </div>
+
+    <div class="screen">
+      <h4>共享、私有与 RSS</h4>
+      <p><code>MAP_SHARED</code> 写回 page cache；<code>MAP_PRIVATE</code> 写时复制，改动不落文件。RSS 是“当前驻留的页”，不等于虚拟大小，也不等于独占内存（共享页会计入多个进程）。</p>
+      <figure class="diagram">
+        <div class="diagram-note">共享 vs 私有</div>
+        <div class="mermaid">
+flowchart LR
+  F["文件 page cache"] --> S["MAP_SHARED<br/>写回同一页"]
+  F --> P["MAP_PRIVATE<br/>COW 后独立"]
+  S --> R["其他进程可见"]
+  P --> R2["仅本进程可见"]
+        </div>
+        <figcaption>共享映射是 IPC/数据库的常用手段；私有映射适合只读加载与写时复制。</figcaption>
+        <details><summary>图源</summary><pre>flowchart LR
+  pagecache --> shared --> visible
+  pagecache --> private --> cow</pre></details>
+      </figure>
+      <p>OOM 不是“内存用完了”这么简单：内核在回收 page cache、slab、可回收映射后仍不足，才按 <code>oom_score</code> 杀进程。容器里还要叠加 cgroup 限制。</p>
+    </div>
+
+    <div class="gate">
+      <div class="gate-step">
+        <div class="gate-step-head"><span class="step-num">1</span><h4>检查理解</h4><span class="gate-time">≈2 分钟 · 不计分</span></div>
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">1.</span><code>mmap</code> 之后立刻发生的是：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="f4-q1" value="a"><span><span class="opt-key">A</span> 文件全部读入内存<span class="opt-why">按页懒加载。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="f4-q1" value="b"><span><span class="opt-key">B</span> 建立 VMA 与映射关系<span class="opt-why">对。首次访问才缺页。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="f4-q1" value="c"><span><span class="opt-key">C</span> 分配物理页<span class="opt-why">缺页时才分配/读入。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>VMA 是“登记”，page fault 才是“落实”。</p>
+        </fieldset>
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">2.</span><code>MAP_SHARED</code> 写入的效果：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="f4-q2" value="a"><span><span class="opt-key">A</span> 只改本进程私有页<span class="opt-why">那是 MAP_PRIVATE。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="f4-q2" value="b"><span><span class="opt-key">B</span> 改 page cache，其他映射可见<span class="opt-why">对。落盘由 msync/回写决定。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="f4-q2" value="c"><span><span class="opt-key">C</span> 直接写磁盘<span class="opt-why">通常先写 page cache。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>共享映射让 page cache 成为进程间共享内存。</p>
+        </fieldset>
+        <fieldset class="mc" data-mc>
+          <legend><span class="qnum">3.</span>RSS 的含义是：</legend>
+          <label class="opt" data-correct="0"><input type="radio" name="f4-q3" value="a"><span><span class="opt-key">A</span> 虚拟地址空间大小<span class="opt-why">那是 VSZ。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="1"><input type="radio" name="f4-q3" value="b"><span><span class="opt-key">B</span> 当前驻留物理内存的页<span class="opt-why">对。共享页也会计入多个进程。</span><span class="mark"></span></span></label>
+          <label class="opt" data-correct="0"><input type="radio" name="f4-q3" value="c"><span><span class="opt-key">C</span> 独占内存<span class="opt-why">共享页不独占。</span><span class="mark"></span></span></label>
+          <div class="mc-foot"><button type="button" class="btn small btn-check">检查</button><button type="button" class="btn small secondary btn-retry" hidden>再试一次</button></div>
+          <p class="mc-result" aria-live="polite"></p>
+          <p class="mc-why" hidden>看内存别只看一个数字：VSZ/RSS/PSS/共享页。</p>
+        </fieldset>
+      </div>
+      <div class="gate-step">
+        <div class="gate-step-head"><span class="step-num">2</span><h4>用自己的话解释</h4><span class="gate-time">≈3 分钟 · 本地保存</span></div>
+        <div class="sa" data-sa="f4-1">
+          <label class="sa-label" for="sa-f4-1">用 2–3 句话解释：mmap 为什么能比 read 少一次拷贝？共享映射与私有映射在写入时分别发生什么？</label>
+          <textarea id="sa-f4-1" rows="4" placeholder="page cache、缺页、COW……"></textarea>
+          <div class="sa-meta"><span class="wordcount">0 字</span><span class="save-status" aria-live="polite"></span><span class="spacer"></span><button type="button" class="textbtn" data-clear>清空</button></div>
+          <div class="sa-actions"><button type="button" class="btn secondary small" data-reveal>查看参考答案</button><button type="button" class="textbtn" data-stuck>我卡住了</button><button type="button" class="textbtn" data-copy-mine>复制我的答案</button></div>
+          <div class="model" hidden><span class="model-kicker">参考答案</span><p>read 需要把 page cache 的数据再拷到用户 buffer；mmap 把文件页直接映射进进程地址空间，访问就是读 page cache，少一次拷贝。MAP_SHARED 写入直接改 page cache，其他映射可见；MAP_PRIVATE 写入触发 COW，复制出私有页，文件不变。</p></div>
+          <div class="selfcheck" aria-label="自查"><label><input type="checkbox"> 我说明了 read 的额外拷贝。</label><label><input type="checkbox"> 我说明了缺页建立映射。</label><label><input type="checkbox"> 我区分了 shared 写 page cache 与 private COW。</label></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="recap"><h4>本小节可以带走</h4><ul><li>mmap 登记 VMA；访问才缺页。</li><li>shared 改 page cache；private 写时复制。</li><li>RSS ≠ 独占内存；OOM 在回收后仍不足才杀进程。</li></ul></div>
+  </section>
+
+  <div class="lab" data-lab="lab-mmap" id="lab-mmap">
+    <div class="lab-head">
+      <div class="lab-kicker">实验 D · 25 分钟 · 难度：中</div>
+      <h3>用 mmap 写文件，再对比私有映射</h3>
+      <p class="lab-sub">shared 映射写入应落到文件；private 映射写入不应改文件。用 msync 与 read 证明。</p>
+    </div>
+    <div class="lab-body">
+      <p class="lab-broken"><span class="label">当前状态</span><code>mmap_demo.c</code> 直接退出 1；没有映射、没有写回。</p>
+      <div class="lab-grid">
+        <div>
+          <h4>任务</h4>
+          <ol class="task-list">
+            <li>打开/创建文件并 <code>ftruncate</code> 到 4096。</li>
+            <li><code>mmap MAP_SHARED</code>，写入 <code>hello</code>，<code>msync</code>。</li>
+            <li>重新 <code>read</code> 文件，确认内容。</li>
+            <li><code>mmap MAP_PRIVATE</code>，改写后确认文件不变。</li>
+          </ol>
+          <h4>交付物</h4>
+          <div class="pathline"><code>linux-course/work/lab-mmap/mmap_demo.c</code><button class="copy" data-copy="linux-course/work/lab-mmap/mmap_demo.c">复制路径</button></div>
+        </div>
+        <div>
+          <h4>只读预览</h4>
+          <div class="lab-preview"><pre>int fd = open(path, O_RDWR | O_CREAT, 0644);
+ftruncate(fd, 4096);
+char *p = mmap(NULL, 4096, PROT_READ | PROT_WRITE,
+               MAP_SHARED, fd, 0);
+/* TODO: write + msync + read back */
+/* TODO: MAP_PRIVATE 对比 */</pre></div>
+          <div class="lab-actions"><button type="button" class="btn" data-check>检查我的实验</button><span class="lab-status">macOS clang 编译运行</span></div>
+          <div class="lab-results" hidden></div>
+        </div>
+      </div>
+      <details class="hints"><summary>三级提示</summary>
+        <div class="hint"><b>提示 1</b><code>mmap</code> 长度 4096，偏移 0；检查返回值不是 <code>MAP_FAILED</code>。</div>
+        <div class="hint"><b>提示 2</b>写 <code>memcpy(p, "hello", 5)</code>；<code>msync(p, 4096, MS_SYNC)</code> 后 <code>pread</code>。</div>
+        <div class="hint"><b>提示 3</b>private 映射改写后 <code>msync</code> 不会落文件；重新 read 仍是 hello。</div>
+      </details>
+      <p class="lab-foot">终端检查：<code>node linux-course/check.mjs lab-mmap</code>；恢复：<code>node linux-course/lab.mjs restore lab-mmap</code>。</p>
+    </div>
+  </div>
+</div>
+</section>
 
 <section class="module" id="m1" data-num="1" data-title="内核 C 与地址空间">
 <div class="wrap">
